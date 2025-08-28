@@ -15,6 +15,9 @@ export interface ApiResponse<T = any> {
 }
 
 export class ResponseUtils {
+  static badRequest(res: Response<any, Record<string, any>>, arg1: string) {
+      throw new Error('Method not implemented.');
+  }
   static conflict(res: Response<any, Record<string, any>>, EMAIL_ALREADY_EXISTS: string) {
       throw new Error('Method not implemented.');
   }

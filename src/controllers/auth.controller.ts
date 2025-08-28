@@ -378,6 +378,10 @@ import { SUCCESS_MESSAGES, ERROR_MESSAGES } from '@/utils/constants';
 import prisma from '@/config/database';
 import logger from '@/config/logger';
 import { catchAsync } from '@/middleware/error.middleware';
+import { tokenService, TokenType } from '@/services/token.service';
+import { emailService } from '@/services/email.service';
+import { oauthService } from '@/services/oauth.service';
+import { env } from '@/config/env';
 
 /**
  * Registrar nuevo usuario
@@ -421,7 +425,7 @@ export const register = catchAsync(async (req: Request, res: Response) => {
     console.log('💾 Starting database transaction...');
     
     // Crear usuario en una transacción
-    const result = await prisma.$transaction(async (tx: typeof prisma) => {
+    const result = await prisma.$transaction(async (tx) => {
       console.log('👤 Creating user in database...');
       
       // Crear el usuario
@@ -476,7 +480,7 @@ export const register = catchAsync(async (req: Request, res: Response) => {
     console.log('🎉 Transaction completed successfully');
 
     // Generar tokens
-    const tokenPair = JwtUtils.generateTokenPair({
+    const tokenPair = JwtUtils.generateTokenPair({ 
       userId: result.id,
       email: result.email,
       role: result.role,
@@ -571,14 +575,14 @@ export const login = catchAsync(async (req: Request, res: Response) => {
       userAgent: req.get('User-Agent'),
     });
 
-    ResponseUtils.success(res, {
+    return ResponseUtils.success(res, {
       user: userWithoutPassword,
       tokens: tokenPair,
     }, SUCCESS_MESSAGES.LOGIN_SUCCESS);
 
   } catch (error) {
     logger.error('Error during login:', error);
-    ResponseUtils.error(res, 'Error al procesar el login');
+    return ResponseUtils.error(res, 'Error al procesar el login');
   }
 });
 
@@ -615,7 +619,7 @@ export const getMe = catchAsync(async (req: Request, res: Response) => {
     return ResponseUtils.notFound(res, ERROR_MESSAGES.USER_NOT_FOUND);
   }
 
-  ResponseUtils.success(res, { user }, 'Información del usuario');
+  return ResponseUtils.success(res, { user }, 'Información del usuario');
 });
 
 /**
@@ -667,11 +671,11 @@ export const refreshToken = catchAsync(async (req: Request, res: Response) => {
       type: user.type,
     });
 
-    ResponseUtils.success(res, { tokens: tokenPair }, 'Tokens renovados');
+    return ResponseUtils.success(res, { tokens: tokenPair }, 'Tokens renovados');
 
   } catch (error) {
     logger.error('Error refreshing token:', error);
-    ResponseUtils.unauthorized(res, 'Refresh token inválido');
+    return ResponseUtils.unauthorized(res, 'Refresh token inválido');
   }
 });
 
@@ -699,7 +703,7 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
     ip: req.ip,
   });
 
-  ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
+  return ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
 });
 
 /**
@@ -739,7 +743,7 @@ export const changePassword = catchAsync(async (req: Request, res: Response) => 
     ip: req.ip,
   });
 
-  ResponseUtils.success(res, null, SUCCESS_MESSAGES.PASSWORD_RESET);
+  return ResponseUtils.success(res, null, SUCCESS_MESSAGES.PASSWORD_RESET);
 });
 
 /**
@@ -756,4 +760,357 @@ export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
 export const resendVerification = catchAsync(async (req: Request, res: Response) => {
   // TODO: Implementar reenvío real
   ResponseUtils.success(res, null, 'Funcionalidad de reenvío en desarrollo');
+});
+
+
+
+
+/**
+ * Verificar email con token
+ * POST /auth/verify-email
+ */
+export const verifyEmailWithToken = catchAsync(async (req: Request, res: Response) => {
+  const { token } = req.body;
+
+  const verificationResult = await tokenService.verifyEmailToken(token);
+
+  if (!verificationResult.isValid) {
+    return ResponseUtils.badRequest(res, verificationResult.error || 'Token de verificación inválido');
+  }
+
+  // Actualizar usuario como verificado
+  const user = await prisma.user.update({
+    where: { id: verificationResult.userId },
+    data: {
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+      status: 'ACTIVE',
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      isEmailVerified: true,
+    },
+  });
+
+  // Enviar email de bienvenida
+  await emailService.sendWelcomeEmail(user.email, user.firstName);
+
+  logger.info('Email verified successfully', {
+    userId: user.id,
+    email: user.email,
+    ip: req.ip,
+  });
+
+  ResponseUtils.success(res, user, 'Email verificado exitosamente');
+});
+
+/**
+ * Reenviar email de verificación
+ * POST /auth/resend-verification
+ */
+export const resendVerificationEmail = catchAsync(async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      isEmailVerified: true,
+    },
+  });
+
+  if (!user) {
+    // No revelar si el usuario existe o no
+    return ResponseUtils.success(res, null, 'Si el email existe, recibirás un nuevo enlace de verificación');
+  }
+
+  if (user.isEmailVerified) {
+    return ResponseUtils.badRequest(res, 'Este email ya está verificado');
+  }
+
+  // Crear nuevo token de verificación
+  const verificationToken = await tokenService.createEmailVerificationToken(user.id);
+
+  // Enviar email de verificación
+  await emailService.sendVerificationEmail({
+    email: user.email,
+    firstName: user.firstName,
+    verificationToken,
+  });
+
+  logger.info('Verification email resent', {
+    userId: user.id,
+    email: user.email,
+    ip: req.ip,
+  });
+
+  ResponseUtils.success(res, null, 'Si el email existe, recibirás un nuevo enlace de verificación');
+});
+
+/**
+ * Solicitar reset de contraseña con token
+ * POST /auth/forgot-password
+ */
+export const forgotPasswordAdvanced = catchAsync(async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+    },
+  });
+
+  if (!user) {
+    // No revelar si el usuario existe o no
+    return ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
+  }
+
+  // Crear token de reset de contraseña
+  const resetToken = await tokenService.createPasswordResetToken(user.id, user.email);
+
+  // Enviar email de reset
+  await emailService.sendPasswordResetEmail({
+    email: user.email,
+    firstName: user.firstName,
+    resetToken,
+  });
+
+  logger.info('Password reset requested', {
+    userId: user.id,
+    email: user.email,
+    ip: req.ip,
+  });
+
+  ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
+});
+
+/**
+ * Restablecer contraseña con token
+ * POST /auth/reset-password
+ */
+export const resetPasswordWithToken = catchAsync(async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+
+  const verificationResult = await tokenService.verifyPasswordResetToken(token);
+
+  if (!verificationResult.isValid) {
+    return ResponseUtils.badRequest(res, verificationResult.error || 'Token de reset inválido o expirado');
+  }
+
+  // Hashear nueva contraseña
+  const hashedPassword = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
+
+  // Actualizar contraseña y marcar token como usado
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: verificationResult.userId },
+      data: { password: hashedPassword },
+    });
+
+    await tokenService.markTokenAsUsed(token);
+
+    // Invalidar todas las sesiones activas
+    await tx.userSession.updateMany({
+      where: { userId: verificationResult.userId },
+      data: { isActive: false },
+    });
+  });
+
+  logger.info('Password reset completed', {
+    userId: verificationResult.userId,
+    ip: req.ip,
+  });
+
+  ResponseUtils.success(res, null, 'Contraseña restablecida exitosamente');
+});
+
+/**
+ * Login con Google
+ * POST /auth/google
+ */
+export const googleLogin = catchAsync(async (req: Request, res: Response) => {
+  const { accessToken, idToken } = req.body;
+
+  let token = accessToken;
+
+  // Si se proporciona idToken, validarlo
+  if (idToken && !accessToken) {
+    const googleUser = await oauthService.validateGoogleToken(idToken);
+    if (!googleUser) {
+      return ResponseUtils.unauthorized(res, 'Token de Google inválido');
+    }
+    token = idToken;
+  }
+
+  if (!token) {
+    return ResponseUtils.badRequest(res, 'Se requiere accessToken o idToken de Google');
+  }
+
+  try {
+    const result = await oauthService.loginWithGoogle(token);
+
+    logger.info('Google login successful', {
+      userId: result.user.id,
+      email: result.user.email,
+      isNewUser: result.isNewUser,
+      ip: req.ip,
+    });
+
+    const responseData = {
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      isNewUser: result.isNewUser,
+    };
+
+    ResponseUtils.success(res, responseData, result.isNewUser ? 'Registro exitoso con Google' : 'Login exitoso con Google');
+  } catch (error: any) {
+    logger.error('Google login failed:', {
+      error: error.message,
+      ip: req.ip,
+    });
+
+    ResponseUtils.badRequest(res, error.message || 'Error en el login con Google');
+  }
+});
+
+/**
+ * Login con Facebook
+ * POST /auth/facebook
+ */
+export const facebookLogin = catchAsync(async (req: Request, res: Response) => {
+  const { accessToken } = req.body;
+
+  if (!accessToken) {
+    return ResponseUtils.badRequest(res, 'Se requiere accessToken de Facebook');
+  }
+
+  try {
+    const result = await oauthService.loginWithFacebook(accessToken);
+
+    logger.info('Facebook login successful', {
+      userId: result.user.id,
+      email: result.user.email,
+      isNewUser: result.isNewUser,
+      ip: req.ip,
+    });
+
+    const responseData = {
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      isNewUser: result.isNewUser,
+    };
+
+    ResponseUtils.success(res, responseData, result.isNewUser ? 'Registro exitoso con Facebook' : 'Login exitoso con Facebook');
+  } catch (error: any) {
+    logger.error('Facebook login failed:', {
+      error: error.message,
+      ip: req.ip,
+    });
+
+    ResponseUtils.badRequest(res, error.message || 'Error en el login con Facebook');
+  }
+});
+
+/**
+ * Callback de Google OAuth
+ * GET /auth/google/callback
+ */
+export const googleCallback = catchAsync(async (req: Request, res: Response) => {
+  const { code, error } = req.query;
+
+  if (error) {
+    return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Error de autenticación con Google')}`);
+  }
+
+  if (!code) {
+    return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Código de autorización no encontrado')}`);
+  }
+
+  try {
+    const accessToken = await oauthService.exchangeGoogleCode(code as string);
+    const result = await oauthService.loginWithGoogle(accessToken);
+
+    // Redirigir al frontend con tokens
+    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?token=${result.accessToken}&refresh=${result.refreshToken}&new=${result.isNewUser}`;
+    res.redirect(redirectUrl);
+  } catch (error: any) {
+    logger.error('Google OAuth callback error:', error);
+    res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Error en el callback de Google')}`);
+  }
+});
+
+/**
+ * Callback de Facebook OAuth
+ * GET /auth/facebook/callback
+ */
+export const facebookCallback = catchAsync(async (req: Request, res: Response) => {
+  const { code, error } = req.query;
+
+  if (error) {
+    return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Error de autenticación con Facebook')}`);
+  }
+
+  if (!code) {
+    return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Código de autorización no encontrado')}`);
+  }
+
+  try {
+    const accessToken = await oauthService.exchangeFacebookCode(code as string);
+    const result = await oauthService.loginWithFacebook(accessToken);
+
+    // Redirigir al frontend con tokens
+    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?token=${result.accessToken}&refresh=${result.refreshToken}&new=${result.isNewUser}`;
+    res.redirect(redirectUrl);
+  } catch (error: any) {
+    logger.error('Facebook OAuth callback error:', error);
+    res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Error en el callback de Facebook')}`);
+  }
+});
+
+/**
+ * Obtener cuentas OAuth vinculadas
+ * GET /auth/oauth-accounts
+ */
+export const getOAuthAccounts = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+
+  const accounts = await oauthService.getUserOAuthAccounts(userId);
+
+  ResponseUtils.success(res, accounts, 'Cuentas OAuth obtenidas exitosamente');
+});
+
+/**
+ * Desvincular cuenta OAuth
+ * DELETE /auth/oauth/:provider
+ */
+export const unlinkOAuthAccount = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  const { provider } = req.params;
+
+  if (!['GOOGLE', 'FACEBOOK'].includes(provider.toUpperCase())) {
+    return ResponseUtils.badRequest(res, 'Proveedor OAuth no válido');
+  }
+
+  const success = await oauthService.unlinkOAuthAccount(userId, provider.toUpperCase() as 'GOOGLE' | 'FACEBOOK');
+
+  if (!success) {
+    return ResponseUtils.notFound(res, 'Cuenta OAuth no encontrada');
+  }
+
+  logger.info('OAuth account unlinked', {
+    userId,
+    provider: provider.toUpperCase(),
+  });
+
+  ResponseUtils.success(res, null, `Cuenta de ${provider} desvinculada exitosamente`);
 });
