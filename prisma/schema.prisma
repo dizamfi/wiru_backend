@@ -31,6 +31,8 @@ enum UserStatus {
 model User {
   id                String     @id @default(cuid())
   email             String     @unique
+  googleId          String?    @unique  // ← Agregado @unique
+  facebookId        String?    @unique  // ← Agregado @unique
   password          String
   firstName         String
   lastName          String
@@ -50,17 +52,18 @@ model User {
   updatedAt         DateTime   @updatedAt
 
   // Relations
-  wallet            Wallet?
-  orders            Order[]
-  bankAccounts      BankAccount[]
-  referrals         User[]     @relation("UserReferrals")
-  referrer          User?      @relation("UserReferrals", fields: [referredBy], references: [referralCode])
-  pointsTransactions PointsTransaction[]
-  notifications     Notification[]
-  sessions          UserSession[]
-
-  verificationTokens VerificationToken[]
-  oauthAccounts     OAuthAccount[]
+  wallet              Wallet?
+  orders              Order[]
+  bankAccounts        BankAccount[]
+  referrals           User[]     @relation("UserReferrals")
+  referrer            User?      @relation("UserReferrals", fields: [referredBy], references: [referralCode])
+  pointsTransactions  PointsTransaction[]
+  notifications       Notification[]
+  sessions            UserSession[]
+  refreshTokens       RefreshToken[]
+  tokenBlacklist      TokenBlacklist[]
+  verificationTokens  VerificationToken[]
+  oauthAccounts       OAuthAccount[]
 
   @@map("users")
 }
@@ -69,14 +72,18 @@ model UserSession {
   id          String   @id @default(cuid())
   userId      String
   token       String   @unique
+  accessToken String?  // ← Campo opcional para access token
   userAgent   String?
   ipAddress   String?
   isActive    Boolean  @default(true)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt  // ← Agregado @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])      // ← Agregado índice
+  @@index([expiresAt])   // ← Agregado índice
   @@map("user_sessions")
 }
 
@@ -86,18 +93,18 @@ enum CategoryStatus {
 }
 
 model Category {
-  id          String         @id @default(cuid())
-  name        String
-  description String?
-  pricePerKg  Decimal        @db.Decimal(10, 2)
-  image       String?
-  status      CategoryStatus @default(ACTIVE)
-  estimatedWeight Decimal?   @db.Decimal(8, 3)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  pricePerKg      Decimal        @db.Decimal(10, 2)
+  image           String?
+  status          CategoryStatus @default(ACTIVE)
+  estimatedWeight Decimal?       @db.Decimal(8, 3)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   // Relations
-  orderItems  OrderItem[]
+  orderItems      OrderItem[]
 
   @@map("categories")
 }
@@ -158,6 +165,9 @@ model Order {
   orderItems        OrderItem[]
   walletTransactions WalletTransaction[]
 
+  @@index([userId])        // ← Agregado índice
+  @@index([status])        // ← Agregado índice
+  @@index([orderNumber])   // ← Agregado índice
   @@map("orders")
 }
 
@@ -179,6 +189,8 @@ model OrderItem {
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   category        Category @relation(fields: [categoryId], references: [id])
 
+  @@index([orderId])     // ← Agregado índice
+  @@index([categoryId])  // ← Agregado índice
   @@map("order_items")
 }
 
@@ -241,6 +253,9 @@ model WalletTransaction {
   wallet              Wallet            @relation(fields: [walletId], references: [id], onDelete: Cascade)
   order               Order?            @relation(fields: [orderId], references: [id])
 
+  @@index([walletId])  // ← Agregado índice
+  @@index([orderId])   // ← Agregado índice
+  @@index([status])    // ← Agregado índice
   @@map("wallet_transactions")
 }
 
@@ -276,6 +291,7 @@ model BankAccount {
   withdrawals       Withdrawal[]
 
   @@unique([userId, accountNumber])
+  @@index([userId])    // ← Agregado índice adicional
   @@map("bank_accounts")
 }
 
@@ -307,6 +323,9 @@ model Withdrawal {
   wallet            Wallet           @relation(fields: [walletId], references: [id])
   bankAccount       BankAccount      @relation(fields: [bankAccountId], references: [id])
 
+  @@index([walletId])       // ← Agregado índice
+  @@index([bankAccountId])  // ← Agregado índice
+  @@index([status])         // ← Agregado índice
   @@map("withdrawals")
 }
 
@@ -323,6 +342,7 @@ model PointsTransaction {
   // Relations
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])  // ← Agregado índice
   @@map("points_transactions")
 }
 
@@ -354,6 +374,8 @@ model Notification {
   // Relations
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])  // ← Agregado índice
+  @@index([status])  // ← Agregado índice
   @@map("notifications")
 }
 
@@ -366,9 +388,9 @@ model SystemSetting {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([category])  // ← Agregado índice
   @@map("system_settings")
 }
-
 
 // Tokens de verificación
 enum TokenType {
@@ -391,6 +413,9 @@ model VerificationToken {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])    // ← Agregado índice
+  @@index([expiresAt]) // ← Agregado índice
+  @@index([type])      // ← Agregado índice
   @@map("verification_tokens")
 }
 
@@ -417,24 +442,44 @@ model OAuthAccount {
   user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])    // ← Agregado índice
   @@map("oauth_accounts")
 }
 
-// Actualizar el modelo User para incluir las relaciones
-// AGREGAR ESTAS LÍNEAS AL MODELO User EXISTENTE:
-// verificationTokens VerificationToken[]
-// oauthAccounts     OAuthAccount[]
-
-// Lista negra de tokens JWT (para logout y invalidación)
-model TokenBlacklist {
-  id        String   @id @default(cuid())
-  tokenId   String   @unique // jti claim del JWT
-  userId    String
-  expiresAt DateTime
-  reason    String? // LOGOUT, SECURITY_BREACH, PASSWORD_CHANGE, etc.
-  createdAt DateTime @default(now())
-
-  @@index([tokenId])
+model RefreshToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  userId      String
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relaciones
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Índices para optimizar consultas
+  @@index([userId])
+  @@index([token])
   @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model TokenBlacklist {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique // Hash SHA256 del token
+  userId      String
+  expiresAt   DateTime // Fecha de expiración del token original
+  reason      String   // Razón por la cual se agregó a la blacklist
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relaciones
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Índices para optimizar consultas
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([tokenHash])
   @@map("token_blacklist")
 }

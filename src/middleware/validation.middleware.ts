@@ -502,6 +502,11 @@ export const authSchemas = {
     email: commonSchemas.email,
   }),
 
+  confirmResetPassword: z.object({
+    token: z.string().min(1, 'Token es requerido'),
+    newPassword: commonSchemas.password,
+  }),
+
   changePassword: z.object({
     currentPassword: z.string().min(1, 'La contraseña actual es requerida'),
     newPassword: commonSchemas.password,
@@ -903,4 +908,16 @@ export const validateQuery = (schema: ZodSchema) => {
       return;
     }
   };
+};
+
+
+// Esquemas OAuth
+export const oauthSchemas = {
+  googleAuth: z.object({
+    credential: z.string().min(1, 'Google credential es requerido'),
+  }),
+
+  facebookAuth: z.object({
+    accessToken: z.string().min(1, 'Facebook access token es requerido'),
+  }),
 };

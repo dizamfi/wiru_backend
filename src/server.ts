@@ -3,6 +3,28 @@ import App from './app';
 import { env, isDev, isProd } from '@/config/env';
 import { connectDatabase, disconnectDatabase } from '@/config/database';
 import logger from '@/config/logger';
+import { TokenCleanupJob } from '@/jobs/tokenCleanup.job';
+
+
+/**
+ * Inicializar jobs y tareas programadas
+ */
+function initializeJobs(): void {
+  try {
+    // Solo inicializar jobs en producción o cuando esté explícitamente habilitado
+    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_JOBS === 'true') {
+      TokenCleanupJob.init();
+      logger.info('Background jobs initialized successfully');
+    } else {
+      logger.info('Background jobs skipped (development mode)');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize background jobs', {
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+}
+
 
 // Función para manejar errores no capturados
 const handleUncaughtErrors = (): void => {
@@ -52,6 +74,8 @@ const startServer = async (): Promise<void> => {
     // Configurar manejo de errores
     handleUncaughtErrors();
 
+
+
     // Log de inicio
     logger.info('Starting Wiru Backend Server...');
     logger.info(`Environment: ${env.NODE_ENV}`);
@@ -79,6 +103,8 @@ const startServer = async (): Promise<void> => {
     if (isProd) {
       logger.info('Production mode - Enhanced security and performance features enabled');
     }
+
+    initializeJobs();
 
   } catch (error) {
     logger.error('Failed to start server:', error);

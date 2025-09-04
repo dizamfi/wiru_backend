@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 // Importar middleware
 import { validateBody, validateParams, validateQuery, walletSchemas, commonSchemas } from '@/middleware/validation.middleware';
-import { authenticate, requireEmailVerified, requireUserType, requireAdmin } from '@/middleware/auth.middleware';
+import { authenticate, requireEmailVerified, requireAdmin } from '@/middleware/auth.middleware';
 import { walletRateLimit, withdrawalRateLimit } from '@/middleware/rateLimit.middleware';
 
 // Importar controladores REALES
