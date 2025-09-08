@@ -454,11 +454,12 @@ import { Router } from 'express';
 
 // Importar middleware
 import { 
+  categorySchemas,
+  commonSchemas,
   validateBody, 
   validateParams, 
   validateQuery, 
-  commonSchemas, 
-  categorySchemas
+  
 } from '@/middleware/validation.middleware';
 import { 
   authenticate, 
