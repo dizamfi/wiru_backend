@@ -2,6 +2,7 @@
 // import { JwtUtils, JwtPayload } from '@/utils/jwt.utils';
 // import { ResponseUtils } from '@/utils/response.utils';
 // import { USER_ROLES, USER_STATUS, ERROR_MESSAGES } from '@/utils/constants';
+// import { TokenBlacklistService } from '@/services/tokenBlacklist.service';
 // import prisma from '@/config/database';
 // import logger from '@/config/logger';
 
@@ -16,10 +17,9 @@
 // }
 
 // /**
-//  * Middleware principal de autenticación
-//  * Verifica el JWT y carga los datos del usuario
+//  * Middleware principal de autenticación con validación de blacklist
 //  */
-//  const authenticate = async (
+// export const authenticate = async (
 //   req: Request,
 //   res: Response,
 //   next: NextFunction
@@ -55,7 +55,14 @@
 //       return;
 //     }
 
-//     // Verificar el token
+//     // 1. Verificar si el token está en la blacklist
+//     const isBlacklisted = await TokenBlacklistService.isTokenBlacklisted(token);
+//     if (isBlacklisted) {
+//       ResponseUtils.unauthorized(res, 'Token revocado');
+//       return;
+//     }
+
+//     // 2. Verificar el token JWT
 //     let payload: JwtPayload;
 //     try {
 //       payload = JwtUtils.verifyAccessToken(token);
@@ -65,7 +72,7 @@
 //       return;
 //     }
 
-//     // Buscar el usuario en la base de datos
+//     // 3. Buscar el usuario en la base de datos
 //     const user = await prisma.user.findUnique({
 //       where: { id: payload.userId },
 //       select: {
@@ -83,29 +90,20 @@
 //       return;
 //     }
 
-//     // Verificar que el usuario esté activo
+//     // 4. Verificar que el usuario esté activo
 //     if (user.status !== USER_STATUS.ACTIVE) {
+//       // Si el usuario está inactivo, agregar el token a la blacklist
+//       await TokenBlacklistService.addToBlacklist(
+//         token, 
+//         user.id, 
+//         `Usuario inactivo: ${user.status}`
+//       );
+      
 //       ResponseUtils.forbidden(res, 'Usuario inactivo o suspendido');
 //       return;
 //     }
 
-//     // Verificar sesión si existe sessionId en el payload
-//     if (payload.sessionId) {
-//       const session = await prisma.userSession.findUnique({
-//         where: { 
-//           id: payload.sessionId,
-//           userId: user.id,
-//           isActive: true,
-//         },
-//       });
-
-//       if (!session || session.expiresAt < new Date()) {
-//         ResponseUtils.unauthorized(res, 'Sesión expirada o inválida');
-//         return;
-//       }
-//     }
-
-//     // Asignar usuario a la request
+//     // 5. Asignar usuario a la request
 //     req.user = {
 //       id: user.id,
 //       email: user.email,
@@ -116,27 +114,102 @@
 //       sessionId: payload.sessionId,
 //     };
 
-//     // Log de acceso exitoso
-//     logger.info('User authenticated successfully', {
-//       userId: user.id,
-//       email: user.email,
+//     // Log de autenticación exitosa (solo en desarrollo)
+//     if (process.env.NODE_ENV === 'development') {
+//       logger.debug('User authenticated successfully', {
+//         userId: user.id,
+//         email: user.email,
+//         role: user.role,
+//         ip: req.ip,
+//         userAgent: req.get('User-Agent'),
+//         path: req.path,
+//       });
+//     }
+
+//     next();
+
+//   } catch (error) {
+//     logger.error('Authentication error', {
+//       error: error instanceof Error ? error.message : error,
 //       ip: req.ip,
 //       userAgent: req.get('User-Agent'),
 //       path: req.path,
 //     });
 
-//     next();
-//   } catch (error) {
-//     logger.error('Authentication error:', error);
-//     ResponseUtils.error(res, 'Error de autenticación');
+//     ResponseUtils.unauthorized(res, 'Error de autenticación');
 //   }
 // };
 
 // /**
-//  * Middleware de autenticación opcional
-//  * No falla si no hay token, pero lo verifica si existe
+//  * Middleware para verificar que el email esté verificado
 //  */
-//  const optionalAuth = async (
+// export const requireEmailVerified = (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ): void => {
+//   const user = req.user as AuthUser;
+
+//   if (!user) {
+//     ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+//     return;
+//   }
+
+//   if (!user.isEmailVerified) {
+//     ResponseUtils.forbidden(res, 'Email no verificado. Por favor verifica tu email antes de continuar.');
+//     return;
+//   }
+
+//   next();
+// };
+
+// /**
+//  * Middleware para verificar rol de administrador
+//  */
+// export const requireAdmin = (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ): void => {
+//   const user = req.user as AuthUser;
+
+//   if (!user) {
+//     ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+//     return;
+//   }
+
+//   if (user.role !== USER_ROLES.ADMIN) {
+//     ResponseUtils.forbidden(res, 'Acceso denegado. Se requieren permisos de administrador.');
+//     return;
+//   }
+
+//   next();
+// };
+
+// /**
+//  * Middleware para verificar rol de moderador o superior
+//  */
+// export const requireModerator = (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ): void => {
+//   const user = req.user as AuthUser;
+
+//   if (!user) {
+//     ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+//     return;
+//   }
+
+//   if (![USER_ROLES.ADMIN, USER_ROLES.MODERATOR, USER_ROLES.USER].includes(user.role as typeof USER_ROLES[keyof typeof USER_ROLES])) {
+//     ResponseUtils.forbidden(res, 'Acceso denegado. Se requieren permisos de moderador o superior.');
+//     return;
+//   }
+
+//   next();
+// };
+
+// export const optionalAuth = async (
 //   req: Request,
 //   res: Response,
 //   next: NextFunction
@@ -161,165 +234,16 @@
 // };
 
 // /**
-//  * Middleware para verificar roles específicos
+//  * Middleware para verificar acceso a perfil propio
 //  */
-//  const requireRole = (...roles: string[]) => {
-//   return (req: Request, res: Response, next: NextFunction): void => {
-//     if (!req.user) {
-//       ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
-//       return;
-//     }
-
-//     if (!roles.includes(req.user.role)) {
-//       ResponseUtils.forbidden(res, 'Permisos insuficientes para esta acción');
-//       return;
-//     }
-
-//     next();
-//   };
-// };
-
-// /**
-//  * Middleware para verificar que el usuario sea admin
-//  */
-//  const requireAdmin = requireRole(USER_ROLES.ADMIN);
-
-// /**
-//  * Middleware para verificar que el usuario sea admin o moderador
-//  */
-//  const requireModerator = requireRole(USER_ROLES.ADMIN, USER_ROLES.MODERATOR);
-
-// /**
-//  * Middleware para verificar tipos de usuario específicos
-//  */
-//  const requireUserType = (...types: string[]) => {
-//   return (req: Request, res: Response, next: NextFunction): void => {
-//     if (!req.user) {
-//       ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
-//       return;
-//     }
-
-//     if (!types.includes(req.user.type)) {
-//       ResponseUtils.forbidden(res, 'Tipo de usuario no autorizado para esta acción');
-//       return;
-//     }
-
-//     next();
-//   };
-// };
-
-// /**
-//  * Middleware para verificar que el email esté verificado
-//  */
-//  const requireEmailVerified = (
+// export const requireOwnProfile = (
 //   req: Request,
 //   res: Response,
 //   next: NextFunction
 // ): void => {
-//   if (!req.user) {
-//     ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
-//     return;
-//   }
+//   const user = req.user as AuthUser;
 
-//   if (!req.user.isEmailVerified) {
-//     ResponseUtils.forbidden(res, 'Email no verificado. Revisa tu correo para verificar tu cuenta.');
-//     return;
-//   }
-
-//   next();
-// };
-
-// /**
-//  * Middleware para verificar ownership de recursos
-//  * Verifica que el usuario sea dueño del recurso o sea admin
-//  */
-//  const requireOwnership = (userIdField: string = 'userId') => {
-//   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-//     if (!req.user) {
-//       ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
-//       return;
-//     }
-
-//     // Los admins pueden acceder a cualquier recurso
-//     if (req.user.role === USER_ROLES.ADMIN) {
-//       next();
-//       return;
-//     }
-
-//     const resourceUserId = req.params[userIdField] || req.body[userIdField];
-    
-//     if (!resourceUserId) {
-//       ResponseUtils.forbidden(res, 'No se puede verificar la propiedad del recurso');
-//       return;
-//     }
-
-//     if (req.user.id !== resourceUserId) {
-//       ResponseUtils.forbidden(res, 'No tienes permisos para acceder a este recurso');
-//       return;
-//     }
-
-//     next();
-//   };
-// };
-
-// /**
-//  * Middleware para verificar ownership dinámico
-//  * Busca el recurso en la base de datos y verifica el owner
-//  */
-//  const requireResourceOwnership = (
-//   model: string,
-//   resourceIdParam: string = 'id',
-//   ownerField: string = 'userId'
-// ) => {
-//   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-//     if (!req.user) {
-//       ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
-//       return;
-//     }
-
-//     // Los admins pueden acceder a cualquier recurso
-//     if (req.user.role === USER_ROLES.ADMIN) {
-//       next();
-//       return;
-//     }
-
-//     try {
-//       const resourceId = req.params[resourceIdParam];
-      
-//       if (!resourceId) {
-//         ResponseUtils.forbidden(res, 'ID de recurso requerido');
-//         return;
-//       }
-
-//       // @ts-ignore - Prisma client dinámico
-//       const resource = await prisma[model].findUnique({
-//         where: { id: resourceId },
-//         select: { [ownerField]: true },
-//       });
-
-//       if (!resource) {
-//         ResponseUtils.notFound(res, 'Recurso no encontrado');
-//         return;
-//       }
-
-//       if (resource[ownerField] !== req.user.id) {
-//         ResponseUtils.forbidden(res, 'No tienes permisos para acceder a este recurso');
-//         return;
-//       }
-
-//       next();
-//     } catch (error) {
-//       logger.error('Resource ownership verification error:', error);
-//       ResponseUtils.error(res, 'Error verificando permisos');
-//     }
-//   };
-// };
-
-// /**
-//  * Middleware para verificar que el usuario sea el propietario del perfil
-//  */
-//  const requireOwnProfile = (req: Request, res: Response, next: NextFunction): void => {
-//   if (!req.user) {
+//   if (!user) {
 //     ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
 //     return;
 //   }
@@ -327,12 +251,12 @@
 //   const profileUserId = req.params.userId || req.params.id;
   
 //   // Los admins pueden acceder a cualquier perfil
-//   if (req.user.role === USER_ROLES.ADMIN) {
+//   if (user.role === USER_ROLES.ADMIN) {
 //     next();
 //     return;
 //   }
 
-//   if (req.user.id !== profileUserId) {
+//   if (user.id !== profileUserId) {
 //     ResponseUtils.forbidden(res, 'Solo puedes acceder a tu propio perfil');
 //     return;
 //   }
@@ -343,58 +267,76 @@
 // /**
 //  * Middleware combinado: autenticar + verificar email
 //  */
-//  const authenticateAndVerifyEmail = [authenticate, requireEmailVerified];
+// export const authenticateAndVerifyEmail = [authenticate, requireEmailVerified];
 
 // /**
 //  * Middleware combinado: autenticar + verificar admin
 //  */
-// const authenticateAdmin = [authenticate, requireAdmin];
+// export const authenticateAdmin = [authenticate, requireAdmin];
 
 // /**
 //  * Middleware combinado: autenticar + verificar moderador
 //  */
-// const authenticateModerator = [authenticate, requireModerator];
-
-// // Exportar todas las funciones individualmente para mayor flexibilidad
-// export {
-//   authenticate,
-//   optionalAuth,
-//   requireRole,
-//   requireAdmin,
-//   requireModerator,
-//   requireUserType,
-//   requireEmailVerified,
-//   requireResourceOwnership,
-//   requireOwnProfile,
-//   authenticateAndVerifyEmail,
-//   requireOwnership
-// };
+// export const authenticateModerator = [authenticate, requireModerator];
 
 
 
 
 
 
+
+
+
+
+
+
+
+// src/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { JwtUtils, JwtPayload } from '@/utils/jwt.utils';
+import { JwtUtils } from '@/utils/jwt.utils';
 import { ResponseUtils } from '@/utils/response.utils';
-import { USER_ROLES, USER_STATUS, ERROR_MESSAGES } from '@/utils/constants';
-import { TokenBlacklistService } from '@/services/tokenBlacklist.service';
 import prisma from '@/config/database';
 import logger from '@/config/logger';
 
-export interface AuthUser {
+// Constantes
+const USER_ROLES = {
+  USER: 'USER',
+  ADMIN: 'ADMIN',
+  MODERATOR: 'MODERATOR',
+} as const;
+
+const ERROR_MESSAGES = {
+  UNAUTHORIZED: 'No autorizado. Acceso denegado.',
+  TOKEN_MISSING: 'Token de acceso requerido',
+  TOKEN_INVALID: 'Token de acceso inválido',
+  TOKEN_EXPIRED: 'Token de acceso expirado',
+  USER_NOT_FOUND: 'Usuario no encontrado',
+  USER_INACTIVE: 'Usuario inactivo',
+  USER_SUSPENDED: 'Usuario suspendido',
+  EMAIL_NOT_VERIFIED: 'Email no verificado',
+  INSUFFICIENT_PERMISSIONS: 'Permisos insuficientes',
+};
+
+// Tipos extendidos
+interface AuthUser {
   id: string;
   email: string;
   role: string;
   type: string;
   status: string;
   isEmailVerified: boolean;
-  sessionId?: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
 }
 
 /**
- * Middleware principal de autenticación con validación de blacklist
+ * Middleware principal de autenticación
  */
 export const authenticate = async (
   req: Request,
@@ -402,56 +344,52 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Extraer token del header Authorization
+    console.log('🔐 Authenticating request...');
+    
+    // Extraer token del header
     const authHeader = req.headers.authorization;
     const token = JwtUtils.extractTokenFromHeader(authHeader);
 
     if (!token) {
-      ResponseUtils.unauthorized(res, 'Token de acceso requerido');
+      console.log('❌ No token provided');
+      ResponseUtils.unauthorized(res, ERROR_MESSAGES.TOKEN_MISSING);
       return;
     }
 
-    // SOLO PARA TESTING - Token mock (REMOVER EN PRODUCCIÓN)
-    if (token === 'mock-token-for-testing') {
-      req.user = {
-        id: 'test-user-123',
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'PERSON',
-        status: 'ACTIVE',
-        isEmailVerified: true
-      };
-      
-      logger.info('Using mock token for testing', {
-        userId: req.user.id,
-        ip: req.ip,
-        path: req.path,
-      });
-      
-      next();
+    // Verificar formato del token
+    if (!JwtUtils.isValidJwtFormat(token)) {
+      console.log('❌ Invalid token format');
+      ResponseUtils.unauthorized(res, ERROR_MESSAGES.TOKEN_INVALID);
       return;
     }
 
-    // 1. Verificar si el token está en la blacklist
-    const isBlacklisted = await TokenBlacklistService.isTokenBlacklisted(token);
+    // Verificar si el token está en blacklist
+    const isBlacklisted = await JwtUtils.isTokenBlacklisted(token);
     if (isBlacklisted) {
-      ResponseUtils.unauthorized(res, 'Token revocado');
+      console.log('❌ Token is blacklisted');
+      ResponseUtils.unauthorized(res, ERROR_MESSAGES.TOKEN_INVALID);
       return;
     }
 
-    // 2. Verificar el token JWT
-    let payload: JwtPayload;
+    let decoded;
     try {
-      payload = JwtUtils.verifyAccessToken(token);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Token inválido';
-      ResponseUtils.unauthorized(res, message);
+      // Verificar y decodificar el token
+      decoded = JwtUtils.verifyAccessToken(token);
+      console.log('✅ Token verified successfully');
+    } catch (error: any) {
+      console.log('❌ Token verification failed:', error.message);
+      
+      if (error.message === 'Token expirado') {
+        ResponseUtils.unauthorized(res, ERROR_MESSAGES.TOKEN_EXPIRED);
+      } else {
+        ResponseUtils.unauthorized(res, ERROR_MESSAGES.TOKEN_INVALID);
+      }
       return;
     }
 
-    // 3. Buscar el usuario en la base de datos
+    // Buscar usuario en la base de datos
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: decoded.userId },
       select: {
         id: true,
         email: true,
@@ -459,61 +397,55 @@ export const authenticate = async (
         type: true,
         status: true,
         isEmailVerified: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
     if (!user) {
+      console.log('❌ User not found:', decoded.userId);
       ResponseUtils.unauthorized(res, ERROR_MESSAGES.USER_NOT_FOUND);
       return;
     }
 
-    // 4. Verificar que el usuario esté activo
-    if (user.status !== USER_STATUS.ACTIVE) {
-      // Si el usuario está inactivo, agregar el token a la blacklist
-      await TokenBlacklistService.addToBlacklist(
-        token, 
-        user.id, 
-        `Usuario inactivo: ${user.status}`
-      );
-      
-      ResponseUtils.forbidden(res, 'Usuario inactivo o suspendido');
+    // Verificar estado del usuario
+    if (user.status === 'INACTIVE') {
+      console.log('❌ User is inactive:', user.email);
+      ResponseUtils.forbidden(res, ERROR_MESSAGES.USER_INACTIVE);
       return;
     }
 
-    // 5. Asignar usuario a la request
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      type: user.type,
-      status: user.status,
-      isEmailVerified: user.isEmailVerified,
-      sessionId: payload.sessionId,
-    };
-
-    // Log de autenticación exitosa (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug('User authenticated successfully', {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path,
-      });
+    if (user.status === 'SUSPENDED') {
+      console.log('❌ User is suspended:', user.email);
+      ResponseUtils.forbidden(res, ERROR_MESSAGES.USER_SUSPENDED);
+      return;
     }
 
-    next();
-
-  } catch (error) {
-    logger.error('Authentication error', {
-      error: error instanceof Error ? error.message : error,
+    // Agregar usuario a la request
+    req.user = user as AuthUser;
+    
+    console.log('✅ User authenticated:', user.email);
+    
+    // Log de actividad
+    logger.info('User authenticated', {
+      userId: user.id,
+      email: user.email,
       ip: req.ip,
       userAgent: req.get('User-Agent'),
       path: req.path,
+      method: req.method,
     });
 
-    ResponseUtils.unauthorized(res, 'Error de autenticación');
+    next();
+  } catch (error) {
+    console.error('❌ Authentication error:', error);
+    logger.error('Authentication middleware error:', {
+      error: error instanceof Error ? error.message : String(error),
+      ip: req.ip,
+      path: req.path,
+    });
+
+    ResponseUtils.error(res, 'Error interno de autenticación', 500);
   }
 };
 
@@ -533,7 +465,8 @@ export const requireEmailVerified = (
   }
 
   if (!user.isEmailVerified) {
-    ResponseUtils.forbidden(res, 'Email no verificado. Por favor verifica tu email antes de continuar.');
+    ResponseUtils.forbidden(res, ERROR_MESSAGES.EMAIL_NOT_VERIFIED + 
+      ' Por favor verifica tu email antes de continuar.');
     return;
   }
 
@@ -578,7 +511,8 @@ export const requireModerator = (
     return;
   }
 
-  if (![USER_ROLES.ADMIN, USER_ROLES.MODERATOR, USER_ROLES.USER].includes(user.role as typeof USER_ROLES[keyof typeof USER_ROLES])) {
+  const allowedRoles = [USER_ROLES.ADMIN, USER_ROLES.MODERATOR];
+  if (!allowedRoles.includes(user.role as any)) {
     ResponseUtils.forbidden(res, 'Acceso denegado. Se requieren permisos de moderador o superior.');
     return;
   }
@@ -586,6 +520,51 @@ export const requireModerator = (
   next();
 };
 
+/**
+ * Middleware para verificar múltiples roles
+ */
+export const requireRoles = (...roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = req.user as AuthUser;
+
+    if (!user) {
+      ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+      return;
+    }
+
+    if (!roles.includes(user.role)) {
+      ResponseUtils.forbidden(res, ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS);
+      return;
+    }
+
+    next();
+  };
+};
+
+/**
+ * Middleware para verificar tipos de usuario específicos
+ */
+export const requireUserType = (...types: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = req.user as AuthUser;
+
+    if (!user) {
+      ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+      return;
+    }
+
+    if (!types.includes(user.type)) {
+      ResponseUtils.forbidden(res, 'Tipo de usuario no autorizado para esta acción');
+      return;
+    }
+
+    next();
+  };
+};
+
+/**
+ * Middleware de autenticación opcional (no falla si no hay token)
+ */
 export const optionalAuth = async (
   req: Request,
   res: Response,
@@ -642,16 +621,45 @@ export const requireOwnProfile = (
 };
 
 /**
- * Middleware combinado: autenticar + verificar email
+ * Middleware para verificar que el usuario está activo
  */
+export const requireActiveUser = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const user = req.user as AuthUser;
+
+  if (!user) {
+    ResponseUtils.unauthorized(res, ERROR_MESSAGES.UNAUTHORIZED);
+    return;
+  }
+
+  if (user.status !== 'ACTIVE') {
+    let message = 'Tu cuenta no está activa.';
+    
+    switch (user.status) {
+      case 'PENDING_VERIFICATION':
+        message = 'Tu cuenta está pendiente de verificación. Revisa tu email.';
+        break;
+      case 'SUSPENDED':
+        message = 'Tu cuenta ha sido suspendida. Contacta al soporte.';
+        break;
+      case 'INACTIVE':
+        message = 'Tu cuenta está inactiva. Contacta al soporte.';
+        break;
+    }
+
+    ResponseUtils.forbidden(res, message);
+    return;
+  }
+
+  next();
+};
+
+// Middlewares combinados para uso común
 export const authenticateAndVerifyEmail = [authenticate, requireEmailVerified];
-
-/**
- * Middleware combinado: autenticar + verificar admin
- */
 export const authenticateAdmin = [authenticate, requireAdmin];
-
-/**
- * Middleware combinado: autenticar + verificar moderador
- */
 export const authenticateModerator = [authenticate, requireModerator];
+export const authenticateActiveUser = [authenticate, requireActiveUser];
+export const authenticateOwner = [authenticate, requireOwnProfile];

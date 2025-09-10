@@ -129,7 +129,7 @@ const handleValidationError = (error: any): AppError => {
  */
 const handleJWTError = (error: Error): AppError => {
   if (error.name === 'JsonWebTokenError') {
-    return new AuthenticationError(ERROR_MESSAGES.INVALID_TOKEN);
+    return new AuthenticationError(ERROR_MESSAGES.TOKEN_INVALID);
   }
   if (error.name === 'TokenExpiredError') {
     return new AuthenticationError(ERROR_MESSAGES.TOKEN_EXPIRED);
