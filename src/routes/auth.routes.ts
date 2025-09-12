@@ -779,7 +779,7 @@ router.post(
  */
 router.post(
   '/verify-email',
-  emailVerificationRateLimit,
+  // emailVerificationRateLimit,
   validateBody(authSchemas.verifyEmail),
   authController.verifyEmail
 );
@@ -892,7 +892,7 @@ if (process.env.NODE_ENV === 'development') {
           'POST /auth/login',
           'POST /auth/refresh',
           'POST /auth/forgot-password',
-          'POST /auth/verify-email',
+          // 'POST /auth/verify-email',
           'POST /auth/resend-verification',
           'POST /auth/reset-password',
           'POST /auth/google',

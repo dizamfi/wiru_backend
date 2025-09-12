@@ -89,7 +89,7 @@ export const createCategory = catchAsync(async (req: Request, res: Response) => 
     createdBy: (req as any).user?.id 
   });
 
-  ResponseUtils.created(res, category, 'Categoría creada exitosamente');
+  return ResponseUtils.created(res, category, 'Categoría creada exitosamente');
 });
 
 /**
@@ -141,7 +141,7 @@ export const updateCategory = catchAsync(async (req: Request, res: Response) => 
     changes: Object.keys(req.body)
   });
 
-  ResponseUtils.success(res, updatedCategory, 'Categoría actualizada exitosamente');
+  return ResponseUtils.success(res, updatedCategory, 'Categoría actualizada exitosamente');
 });
 
 /**
@@ -191,7 +191,7 @@ export const deleteCategory = catchAsync(async (req: Request, res: Response) => 
     deletedBy: (req as any).user?.id 
   });
 
-  ResponseUtils.success(res, deletedCategory, 'Categoría eliminada exitosamente');
+  return ResponseUtils.success(res, deletedCategory, 'Categoría eliminada exitosamente');
 });
 
 /**

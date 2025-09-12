@@ -99,7 +99,7 @@ export const createOrder = catchAsync(async (req: Request, res: Response) => {
     estimatedTotal 
   });
 
-  ResponseUtils.created(res, order, 'Orden creada exitosamente');
+  return ResponseUtils.created(res, order, 'Orden creada exitosamente');
 });
 
 /**
@@ -411,7 +411,7 @@ export const cancelOrder = catchAsync(async (req: Request, res: Response) => {
     cancelledBy: userId 
   });
 
-  ResponseUtils.success(res, cancelledOrder, 'Orden cancelada exitosamente');
+  return ResponseUtils.success(res, cancelledOrder, 'Orden cancelada exitosamente');
 });
 
 /**

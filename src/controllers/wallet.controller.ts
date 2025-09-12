@@ -249,7 +249,7 @@ export const createTransaction = catchAsync(async (req: Request, res: Response) 
     newBalance: result.wallet.balance
   });
 
-  ResponseUtils.created(res, result, 'Transacción creada exitosamente');
+  return ResponseUtils.created(res, result, 'Transacción creada exitosamente');
 });
 
 /**
@@ -330,7 +330,7 @@ export const requestWithdrawal = catchAsync(async (req: Request, res: Response) 
     amount
   });
 
-  ResponseUtils.created(res, withdrawal, 'Solicitud de retiro creada exitosamente');
+  return ResponseUtils.created(res, withdrawal, 'Solicitud de retiro creada exitosamente');
 });
 
 /**
@@ -475,7 +475,7 @@ export const processWithdrawal = catchAsync(async (req: Request, res: Response) 
     processedBy: (req as any).user?.id
   });
 
-  ResponseUtils.success(res, updatedWithdrawal, 'Retiro procesado exitosamente');
+  return ResponseUtils.success(res, updatedWithdrawal, 'Retiro procesado exitosamente');
 });
 
 /**

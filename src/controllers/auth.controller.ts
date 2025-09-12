@@ -841,6 +841,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import prisma from '@/config/database';
 import { ResponseUtils } from '@/utils/response.utils';
 import { JwtUtils } from '@/utils/jwt.utils';
@@ -848,6 +849,27 @@ import { EmailService } from '@/services/email.service';
 import { catchAsync } from '@/middleware/error.middleware';
 import logger from '@/config/logger';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/utils/constants';
+import { OAuth2Client } from 'google-auth-library';
+import { env } from '@/config/env';
+
+
+interface GoogleUser {
+  id: string;
+  email: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  verified_email?: boolean;
+}
+
+interface FacebookUser {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  picture?: { data?: { url?: string } };
+  name?: string;
+}
 
 /**
  * Registrar nuevo usuario
@@ -1173,77 +1195,157 @@ export const login = catchAsync(async (req: Request, res: Response) => {
   }, 'Inicio de sesión exitoso');
 });
 
+// /**
+//  * Verificar email con token
+//  * POST /auth/verify-email
+//  */
+// export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
+//   const { token } = req.body;
+
+//   if (!token) {
+//     return ResponseUtils.badRequest(res, 'Token de verificación es requerido');
+//   }
+
+//   console.log('🔍 Verifying email token:', token.substring(0, 10) + '...');
+
+//   try {
+//     // Buscar el token de verificación en la base de datos
+//     const verificationToken = await prisma.verificationToken.findUnique({
+//       where: { 
+//         token,
+//         type: 'EMAIL_VERIFICATION',
+//         isUsed: false 
+//       },
+//       include: {
+//         user: {
+//           select: {
+//             id: true,
+//             email: true,
+//             firstName: true,
+//             lastName: true,
+//             isEmailVerified: true,
+//             status: true
+//           }
+//         }
+//       }
+//     });
+
+//     if (!verificationToken) {
+//       console.log('❌ Invalid or not found token');
+//       return ResponseUtils.badRequest(res, 'Token de verificación inválido o ya utilizado');
+//     }
+
+//     // Verificar si el token ha expirado
+//     if (verificationToken.expiresAt < new Date()) {
+//       console.log('❌ Token expired');
+//       return ResponseUtils.badRequest(res, 'El token de verificación ha expirado');
+//     }
+
+//     // Verificar si el email ya está verificado
+//     if (verificationToken.user.isEmailVerified) {
+//       console.log('⚠️ Email already verified');
+//       return ResponseUtils.badRequest(res, 'Este email ya está verificado');
+//     }
+
+//     // Actualizar usuario y marcar token como usado en una transacción
+//     const result = await prisma.$transaction(async (tx) => {
+//       // Marcar token como usado
+//       await tx.verificationToken.update({
+//         where: { id: verificationToken.id },
+//         data: { 
+//           isUsed: true,
+//           usedAt: new Date()
+//         }
+//       });
+
+//       // Actualizar usuario como verificado
+//       const updatedUser = await tx.user.update({
+//         where: { id: verificationToken.userId },
+//         data: {
+//           isEmailVerified: true,
+//           emailVerifiedAt: new Date(),
+//           status: 'ACTIVE' // Activar la cuenta al verificar el email
+//         },
+//         select: {
+//           id: true,
+//           email: true,
+//           firstName: true,
+//           lastName: true,
+//           isEmailVerified: true,
+//           status: true
+//         }
+//       });
+
+//       return updatedUser;
+//     });
+
+//     // Crear billetera para el usuario verificado (si no existe)
+//     try {
+//       await prisma.wallet.upsert({
+//         where: { userId: result.id },
+//         update: {},
+//         create: {
+//           userId: result.id,
+//           balance: 0,
+//           availableBalance: 0,
+//           pendingBalance: 0,
+//           currency: 'USD',
+//           status: 'ACTIVE'
+//         }
+//       });
+//       console.log('✅ Wallet created/updated for user');
+//     } catch (walletError) {
+//       console.warn('⚠️ Error creating wallet (non-critical):', walletError);
+//     }
+
+//     // Enviar email de bienvenida (opcional, no bloquear si falla)
+//     try {
+//       await EmailService.sendWelcomeEmail(result.email, result.firstName);
+//       console.log('✅ Welcome email sent');
+//     } catch (emailError) {
+//       console.warn('⚠️ Failed to send welcome email (non-critical):', emailError);
+//     }
+
+//     console.log('✅ Email verified successfully for user:', result.email);
+    
+//     logger.info('Email verified successfully', {
+//       userId: result.id,
+//       email: result.email,
+//       ip: req.ip,
+//     });
+
+//     return ResponseUtils.success(res, {
+//       user: result,
+//       message: '¡Email verificado exitosamente! Tu cuenta está ahora activa.'
+//     }, '¡Bienvenido a Wiru! Tu email ha sido verificado exitosamente.');
+
+//   } catch (error) {
+//     console.error('❌ Error during email verification:', error);
+//     logger.error('Email verification error:', error);
+//     return ResponseUtils.error(res, 'Error al verificar el email');
+//   }
+// });
+
+
+
+
 /**
- * Verificar email con token
+ * Verificar email con token (mejorado para manejar tokens ya utilizados)
  * POST /auth/verify-email
  */
 export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
   const { token } = req.body;
 
-  if (!token) {
-    return ResponseUtils.badRequest(res, 'Token de verificación es requerido');
-  }
-
   console.log('🔍 Verifying email token:', token.substring(0, 10) + '...');
 
-  try {
-    // Buscar el token de verificación en la base de datos
-    const verificationToken = await prisma.verificationToken.findUnique({
-      where: { 
-        token,
-        type: 'EMAIL_VERIFICATION',
-        isUsed: false 
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            isEmailVerified: true,
-            status: true
-          }
-        }
-      }
-    });
-
-    if (!verificationToken) {
-      console.log('❌ Invalid or not found token');
-      return ResponseUtils.badRequest(res, 'Token de verificación inválido o ya utilizado');
-    }
-
-    // Verificar si el token ha expirado
-    if (verificationToken.expiresAt < new Date()) {
-      console.log('❌ Token expired');
-      return ResponseUtils.badRequest(res, 'El token de verificación ha expirado');
-    }
-
-    // Verificar si el email ya está verificado
-    if (verificationToken.user.isEmailVerified) {
-      console.log('⚠️ Email already verified');
-      return ResponseUtils.badRequest(res, 'Este email ya está verificado');
-    }
-
-    // Actualizar usuario y marcar token como usado en una transacción
-    const result = await prisma.$transaction(async (tx) => {
-      // Marcar token como usado
-      await tx.verificationToken.update({
-        where: { id: verificationToken.id },
-        data: { 
-          isUsed: true,
-          usedAt: new Date()
-        }
-      });
-
-      // Actualizar usuario como verificado
-      const updatedUser = await tx.user.update({
-        where: { id: verificationToken.userId },
-        data: {
-          isEmailVerified: true,
-          emailVerifiedAt: new Date(),
-          status: 'ACTIVE' // Activar la cuenta al verificar el email
-        },
+  // Buscar el token de verificación (incluso si ya fue usado)
+  const verificationToken = await prisma.verificationToken.findFirst({
+    where: { 
+      token,
+      type: 'EMAIL_VERIFICATION'
+    },
+    include: {
+      user: {
         select: {
           id: true,
           email: true,
@@ -1252,18 +1354,139 @@ export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
           isEmailVerified: true,
           status: true
         }
-      });
+      }
+    }
+  });
 
-      return updatedUser;
+  if (!verificationToken) {
+    console.log('❌ Invalid or not found token');
+    return ResponseUtils.badRequest(res, 'Token de verificación inválido');
+  }
+
+  // Verificar si el token ha expirado
+  if (verificationToken.expiresAt < new Date()) {
+    console.log('❌ Token expired');
+    return ResponseUtils.badRequest(res, 'El token de verificación ha expirado');
+  }
+
+  // ✅ NUEVO: Si el token ya fue usado pero el email YA está verificado, retornar éxito
+  if (verificationToken.isUsed && verificationToken.user.isEmailVerified) {
+    console.log('⚠️ Token already used but email already verified - returning success');
+    
+    // Enviar email de bienvenida si no se ha enviado (verificar con algún flag o timestamp)
+    try {
+      await EmailService.sendWelcomeEmail(
+        verificationToken.user.email,
+        verificationToken.user.firstName
+      );
+      console.log('✅ Welcome email sent');
+    } catch (emailError) {
+      console.error('❌ Error sending welcome email:', emailError);
+      // No fallar la verificación por el email de bienvenida
+    }
+
+    // Asegurar que la wallet existe
+    try {
+      await ensureWalletExists(verificationToken.userId);
+      console.log('✅ Wallet created/updated for user');
+    } catch (walletError) {
+      console.error('❌ Error creating wallet:', walletError);
+      // No fallar la verificación por la wallet
+    }
+
+    return ResponseUtils.success(res, {
+      user: verificationToken.user,
+      message: 'Email ya verificado anteriormente'
+    }, 'Email verificado exitosamente');
+  }
+
+  // Si el token ya fue usado pero el email NO está verificado, es un error
+  if (verificationToken.isUsed && !verificationToken.user.isEmailVerified) {
+    console.log('❌ Token already used but email not verified');
+    return ResponseUtils.badRequest(res, 'Este token ya ha sido utilizado');
+  }
+
+  // Verificar si el email ya está verificado (sin usar token)
+  if (verificationToken.user.isEmailVerified) {
+    console.log('⚠️ Email already verified');
+    return ResponseUtils.badRequest(res, 'Este email ya está verificado');
+  }
+
+  // Actualizar usuario y marcar token como usado en una transacción
+  const result = await prisma.$transaction(async (tx) => {
+    // Marcar token como usado
+    await tx.verificationToken.update({
+      where: { id: verificationToken.id },
+      data: { 
+        isUsed: true,
+        usedAt: new Date()
+      }
     });
 
-    // Crear billetera para el usuario verificado (si no existe)
-    try {
-      await prisma.wallet.upsert({
-        where: { userId: result.id },
-        update: {},
-        create: {
-          userId: result.id,
+    // Actualizar usuario como verificado
+    const updatedUser = await tx.user.update({
+      where: { id: verificationToken.userId },
+      data: {
+        isEmailVerified: true,
+        emailVerifiedAt: new Date(),
+        status: 'ACTIVE', // Activar usuario después de verificar email
+      }
+    });
+
+    return updatedUser;
+  });
+
+  console.log('✅ Email verified successfully for user:', verificationToken.user.email);
+
+  // Enviar email de bienvenida
+  try {
+    await EmailService.sendWelcomeEmail(
+      verificationToken.user.email,
+      verificationToken.user.firstName
+    );
+    console.log('✅ Welcome email sent');
+  } catch (emailError) {
+    console.error('❌ Error sending welcome email:', emailError);
+    // No fallar la verificación por el email de bienvenida
+  }
+
+  // Asegurar que la wallet existe
+  try {
+    await ensureWalletExists(verificationToken.userId);
+    console.log('✅ Wallet created/updated for user');
+  } catch (walletError) {
+    console.error('❌ Error creating wallet:', walletError);
+    // No fallar la verificación por la wallet
+  }
+
+  // Log del evento
+  logger.info('Email verified successfully', {
+    userId: verificationToken.userId,
+    email: verificationToken.user.email,
+  });
+
+  return ResponseUtils.success(res, {
+    user: result,
+    message: 'Email verificado exitosamente'
+  }, 'Email verificado exitosamente');
+});
+
+
+/**
+ * Función helper para asegurar que existe la wallet
+ */
+async function ensureWalletExists(userId: string): Promise<void> {
+  try {
+    // Verificar si ya existe la wallet
+    const existingWallet = await prisma.wallet.findUnique({
+      where: { userId }
+    });
+
+    if (!existingWallet) {
+      // Crear nueva wallet
+      await prisma.wallet.create({
+        data: {
+          userId,
           balance: 0,
           availableBalance: 0,
           pendingBalance: 0,
@@ -1271,38 +1494,17 @@ export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
           status: 'ACTIVE'
         }
       });
-      console.log('✅ Wallet created/updated for user');
-    } catch (walletError) {
-      console.warn('⚠️ Error creating wallet (non-critical):', walletError);
+      console.log('✅ New wallet created for user:', userId);
+    } else {
+      console.log('✅ Wallet already exists for user:', userId);
     }
-
-    // Enviar email de bienvenida (opcional, no bloquear si falla)
-    try {
-      await EmailService.sendWelcomeEmail(result.email, result.firstName);
-      console.log('✅ Welcome email sent');
-    } catch (emailError) {
-      console.warn('⚠️ Failed to send welcome email (non-critical):', emailError);
-    }
-
-    console.log('✅ Email verified successfully for user:', result.email);
-    
-    logger.info('Email verified successfully', {
-      userId: result.id,
-      email: result.email,
-      ip: req.ip,
-    });
-
-    ResponseUtils.success(res, {
-      user: result,
-      message: '¡Email verificado exitosamente! Tu cuenta está ahora activa.'
-    }, '¡Bienvenido a Wiru! Tu email ha sido verificado exitosamente.');
-
   } catch (error) {
-    console.error('❌ Error during email verification:', error);
-    logger.error('Email verification error:', error);
-    ResponseUtils.error(res, 'Error al verificar el email');
+    console.error('❌ Error in ensureWalletExists:', error);
+    throw error;
   }
-});
+}
+
+
 
 /**
  * Reenviar email de verificación
@@ -1390,12 +1592,12 @@ export const resendVerification = catchAsync(async (req: Request, res: Response)
       ip: req.ip,
     });
 
-    ResponseUtils.success(res, null, 'Se ha enviado un nuevo email de verificación a tu dirección de correo');
+    return ResponseUtils.success(res, null, 'Se ha enviado un nuevo email de verificación a tu dirección de correo');
 
   } catch (error) {
     console.error('❌ Error resending verification email:', error);
     logger.error('Resend verification error:', error);
-    ResponseUtils.error(res, 'Error al reenviar el email de verificación');
+    return ResponseUtils.error(res, 'Error al reenviar el email de verificación');
   }
 });
 
@@ -1479,103 +1681,187 @@ export const logout = catchAsync(async (req: Request, res: Response) => {
 export const forgotPassword = catchAsync(async (req: Request, res: Response) => {
   const { email } = req.body;
 
+  console.log('🔄 Password reset requested for:', email);
+
+  // Buscar usuario
   const user = await prisma.user.findUnique({
     where: { email },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+    }
   });
 
-  // Siempre retornar éxito por seguridad
+  // Siempre devolver éxito para evitar enumeración de usuarios
   if (!user) {
-    return ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
+    console.log('❌ User not found for password reset:', email);
+    return ResponseUtils.success(
+      res, 
+      null, 
+      'Si el email existe, recibirás instrucciones para restablecer tu contraseña'
+    );
   }
 
-  // Invalidar tokens anteriores
+  // Invalidar tokens anteriores de reset de contraseña
   await prisma.verificationToken.updateMany({
     where: {
       userId: user.id,
       type: 'PASSWORD_RESET',
       isUsed: false,
     },
-    data: {
+    data: { 
       isUsed: true,
-      usedAt: new Date(),
-    },
+      usedAt: new Date()
+    }
   });
 
-  // Crear token de reset
+  // Generar nuevo token
   const resetToken = uuidv4();
-  
+
+  // Guardar token en base de datos
   await prisma.verificationToken.create({
     data: {
       userId: user.id,
       token: resetToken,
       type: 'PASSWORD_RESET',
       expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 horas
-    },
+    }
   });
 
-  // Enviar email (implementar después)
-  // await EmailService.sendPasswordResetEmail(user.email, user.firstName, resetToken);
+  console.log('✅ Password reset token created for user:', user.email);
 
-  return ResponseUtils.success(res, null, 'Si el email existe, recibirás instrucciones para restablecer tu contraseña');
+  // Enviar email de reset
+  try {
+    await EmailService.sendPasswordResetEmail(
+      email,
+      user.firstName,
+      resetToken
+    );
+
+    console.log('✅ Password reset email sent successfully');
+    
+    logger.info('Password reset requested', {
+      userId: user.id,
+      email: user.email,
+      ip: req.ip,
+    });
+    
+  } catch (emailError) {
+    console.error('❌ Error sending password reset email:', emailError);
+    logger.error('Error sending password reset email', {
+      userId: user.id,
+      email: user.email,
+      error: emailError,
+    });
+  }
+
+  return ResponseUtils.success(
+    res, 
+    null, 
+    'Si el email existe, recibirás instrucciones para restablecer tu contraseña'
+  );
 });
 
 /**
- * Restablecer contraseña
+ * Restablecer contraseña con token
  * POST /auth/reset-password
  */
 export const resetPassword = catchAsync(async (req: Request, res: Response) => {
-  const { token, newPassword } = req.body;
+  const { token, password } = req.body;
 
-  // Buscar token
-  const resetToken = await prisma.verificationToken.findFirst({
+  console.log('🔄 Password reset attempt with token:', token.substring(0, 10) + '...');
+
+  // Buscar token válido
+  const verificationToken = await prisma.verificationToken.findFirst({
     where: {
       token,
       type: 'PASSWORD_RESET',
       isUsed: false,
-      expiresAt: {
-        gt: new Date(),
-      },
+      expiresAt: { gt: new Date() } // Token no expirado
     },
     include: {
-      user: true,
-    },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+        }
+      }
+    }
   });
 
-  if (!resetToken) {
-    return ResponseUtils.badRequest(res, 'Token de restablecimiento inválido o expirado');
+  if (!verificationToken) {
+    console.log('❌ Invalid or expired password reset token');
+    return ResponseUtils.badRequest(
+      res, 
+      'Token de restablecimiento inválido o expirado. Solicita un nuevo enlace.'
+    );
   }
 
-  // Hashear nueva contraseña
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  console.log('✅ Valid password reset token found for user:', verificationToken.user.email);
 
-  // Actualizar contraseña y marcar token como usado
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: resetToken.userId },
+  // Actualizar contraseña y marcar token como usado en transacción
+  await prisma.$transaction(async (tx) => {
+    // Hash de la nueva contraseña
+    const hashedPassword = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
+
+    // Actualizar contraseña del usuario
+    await tx.user.update({
+      where: { id: verificationToken.userId },
       data: {
         password: hashedPassword,
-      },
-    }),
-    prisma.verificationToken.update({
-      where: { id: resetToken.id },
+      }
+    });
+
+    // Marcar token como usado
+    await tx.verificationToken.update({
+      where: { id: verificationToken.id },
       data: {
         isUsed: true,
         usedAt: new Date(),
-      },
-    }),
-    // Invalidar todos los refresh tokens del usuario
-    prisma.refreshToken.updateMany({
-      where: { userId: resetToken.userId },
-      data: { isActive: false },
-    }),
-  ]);
+      }
+    });
 
-  logger.info('Password reset successfully', {
-    userId: resetToken.userId,
-    email: resetToken.user.email,
+    // Invalidar todas las sesiones activas del usuario por seguridad
+    await tx.userSession.updateMany({
+      where: { userId: verificationToken.userId },
+      data: { isActive: false }
+    });
+
+    // Invalidar todos los refresh tokens
+    await tx.refreshToken.updateMany({
+      where: { userId: verificationToken.userId },
+      data: { isActive: false }
+    });
   });
 
-  return ResponseUtils.success(res, null, 'Contraseña restablecida exitosamente');
+  console.log('✅ Password reset successful for user:', verificationToken.user.email);
+
+  // Log del evento
+  logger.info('Password reset successful', {
+    userId: verificationToken.userId,
+    email: verificationToken.user.email,
+    ip: req.ip,
+  });
+
+  // Opcional: Enviar email de confirmación
+  try {
+    await EmailService.sendPasswordChangedNotification(
+      verificationToken.user.email,
+      verificationToken.user.firstName
+    );
+    console.log('✅ Password change notification sent');
+  } catch (emailError) {
+    console.error('❌ Error sending password change notification:', emailError);
+    // No fallar el reset por el email de notificación
+  }
+
+  return ResponseUtils.success(
+    res,
+    null,
+    'Contraseña restablecida exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.'
+  );
 });
 
 
@@ -1664,11 +1950,472 @@ export const changePassword = catchAsync(async (req: Request, res: Response) => 
   return ResponseUtils.success(res, null, 'Contraseña cambiada exitosamente');
 });
 
-// OAuth controllers (placeholders para futura implementación)
+/**
+ * Autenticación con Google OAuth
+ * POST /auth/google
+ */
 export const googleAuth = catchAsync(async (req: Request, res: Response) => {
-  return ResponseUtils.error(res, 'OAuth de Google no implementado aún', 501);
+  const { credential, access_token } = req.body;
+  
+  console.log('🔍 Google OAuth attempt');
+  
+  try {
+    let userInfo: any;
+    
+    // Método 1: Usar credential (ID Token de Google Sign-In)
+    if (credential) {
+      const client = new OAuth2Client(env.GOOGLE_CLIENT_ID);
+      const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: env.GOOGLE_CLIENT_ID,
+      });
+      
+      const payload = ticket.getPayload();
+      if (!payload) {
+        return ResponseUtils.badRequest(res, 'Token de Google inválido');
+      }
+      
+      userInfo = {
+        googleId: payload.sub,
+        email: payload.email,
+        firstName: payload.given_name || '',
+        lastName: payload.family_name || '',
+        avatar: payload.picture,
+        emailVerified: payload.email_verified,
+      };
+    }
+    // Método 2: Usar access_token (OAuth2)
+    else if (access_token) {
+      const response = await fetch(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${access_token}`);
+      const googleUser = await response.json();
+      
+      if (!response.ok) {
+        return ResponseUtils.badRequest(res, 'Token de acceso de Google inválido');
+      }
+
+      const googleUserTyped = googleUser as GoogleUser;
+      
+      userInfo = {
+        googleId: googleUserTyped.id,
+        email: googleUserTyped.email,
+        firstName: googleUserTyped.given_name || '',
+        lastName: googleUserTyped.family_name || '',
+        avatar: googleUserTyped.picture,
+        emailVerified: googleUserTyped.verified_email,
+      };
+    } else {
+      return ResponseUtils.badRequest(res, 'Se requiere credential o access_token');
+    }
+    
+    if (!userInfo.emailVerified) {
+      return ResponseUtils.badRequest(res, 'El email de Google no está verificado');
+    }
+    
+    // Buscar usuario existente por email o googleId
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: userInfo.email },
+          { googleId: userInfo.googleId }
+        ]
+      },
+      include: {
+        wallet: true
+      }
+    });
+    
+    let isNewUser = false;
+    
+    if (!user) {
+      // Crear nuevo usuario
+      isNewUser = true;
+      
+      // Generar código de referido único
+      const referralCode = await generateUniqueReferralCode();
+      
+      // Crear usuario en transacción
+      user = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: userInfo.email,
+            googleId: userInfo.googleId,
+            password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12), // Password random
+            firstName: userInfo.firstName,
+            lastName: userInfo.lastName,
+            avatar: userInfo.avatar,
+            role: 'USER',
+            type: 'PERSON',
+            status: 'ACTIVE', // Google users are auto-verified
+            isEmailVerified: true,
+            emailVerifiedAt: new Date(),
+            referralCode,
+          },
+          include: {
+            wallet: true
+          }
+        });
+        
+        // Crear wallet
+        await tx.wallet.create({
+          data: {
+            userId: newUser.id,
+            balance: 0,
+            availableBalance: 0,
+            pendingBalance: 0,
+            currency: 'USD',
+            status: 'ACTIVE'
+          }
+        });
+        
+        return newUser;
+      });
+      
+      console.log('✅ New Google user created:', user.email);
+      
+      // Enviar email de bienvenida
+      try {
+        await EmailService.sendWelcomeEmail(user.email, user.firstName);
+        console.log('✅ Welcome email sent to Google user');
+      } catch (emailError) {
+        console.error('❌ Error sending welcome email:', emailError);
+      }
+      
+    } else {
+      // Usuario existente - actualizar googleId si no lo tiene
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { 
+            googleId: userInfo.googleId,
+            avatar: userInfo.avatar || user.avatar,
+            isEmailVerified: true,
+            emailVerifiedAt: user.emailVerifiedAt || new Date(),
+            status: 'ACTIVE'
+          },
+          include: {
+            wallet: true
+          }
+        });
+        
+        console.log('✅ Existing user linked with Google:', user.email);
+      }
+      
+      // Asegurar que tiene wallet
+      if (!user.wallet) {
+        await prisma.wallet.create({
+          data: {
+            userId: user.id,
+            balance: 0,
+            availableBalance: 0,
+            pendingBalance: 0,
+            currency: 'USD',
+            status: 'ACTIVE'
+          }
+        });
+      }
+    }
+    
+    // Generar tokens JWT
+    const tokenPayload = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      type: user.type,
+      sessionId: uuidv4()
+    };
+    
+    const tokens = JwtUtils.generateTokenPair(tokenPayload);
+    
+    // Crear sesión de usuario
+    await prisma.userSession.create({
+      data: {
+        userId: user.id,
+        token: tokens.refreshToken,
+        accessToken: tokens.accessToken,
+        userAgent: req.get('User-Agent') || 'Unknown',
+        ipAddress: req.ip || 'Unknown',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+      }
+    });
+    
+    // Preparar respuesta del usuario (sin password)
+    const { password, ...userResponse } = user;
+    
+    // Log del evento
+    logger.info('Google OAuth login successful', {
+      userId: user.id,
+      email: user.email,
+      isNewUser,
+      ip: req.ip,
+    });
+    
+    return ResponseUtils.success(res, {
+      user: userResponse,
+      tokens: {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+      isNewUser,
+      message: isNewUser ? 'Cuenta creada exitosamente con Google' : 'Login exitoso con Google'
+    }, isNewUser ? 'Registro exitoso' : 'Login exitoso');
+    
+  } catch (error: any) {
+    console.error('❌ Google OAuth error:', error);
+    logger.error('Google OAuth error', {
+      error: error.message,
+      ip: req.ip,
+    });
+    
+    if (error.message.includes('Token')) {
+      return ResponseUtils.badRequest(res, 'Token de Google inválido o expirado');
+    }
+    
+    return ResponseUtils.internalServerError(res, 'Error en la autenticación con Google');
+  }
 });
 
+
+/**
+ * Generar código de referido único
+ */
+async function generateUniqueReferralCode(): Promise<string> {
+  let referralCode: string;
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  do {
+    // Generar código aleatorio de 8 caracteres
+    referralCode = Math.random().toString(36).substr(2, 8).toUpperCase();
+    attempts++;
+    
+    // Verificar si el código ya existe
+    const existingUser = await prisma.user.findUnique({
+      where: { referralCode }
+    });
+    
+    if (!existingUser) {
+      break;
+    }
+    
+    if (attempts >= maxAttempts) {
+      throw new Error('No se pudo generar un código de referido único');
+    }
+  } while (true);
+  
+  return referralCode;
+}
+
+/**
+ * Autenticación con Facebook OAuth
+ * POST /auth/facebook
+ */
 export const facebookAuth = catchAsync(async (req: Request, res: Response) => {
-  return ResponseUtils.error(res, 'OAuth de Facebook no implementado aún', 501);
+  const { accessToken, userID } = req.body;
+  
+  console.log('🔍 Facebook OAuth attempt');
+  
+  try {
+    if (!accessToken) {
+      return ResponseUtils.badRequest(res, 'Se requiere accessToken de Facebook');
+    }
+    
+    // Verificar el access token con Facebook Graph API
+    const facebookResponse = await fetch(
+      `https://graph.facebook.com/me?access_token=${accessToken}&fields=id,email,first_name,last_name,name,picture.type(large)`
+    );
+    
+    if (!facebookResponse.ok) {
+      console.error('❌ Facebook API error:', await facebookResponse.text());
+      return ResponseUtils.badRequest(res, 'Token de Facebook inválido o expirado');
+    }
+
+const facebookUser = await facebookResponse.json() as FacebookUser;
+    
+    // Verificar que el userID coincida (si se proporciona)
+    if (userID && facebookUser.id !== userID) {
+      return ResponseUtils.badRequest(res, 'User ID de Facebook no coincide');
+    }
+    
+    if (!facebookUser.email) {
+      return ResponseUtils.badRequest(res, 'Facebook no proporcionó un email válido');
+    }
+    
+    const userInfo = {
+      facebookId: facebookUser.id,
+      email: facebookUser.email,
+      firstName: facebookUser.first_name || '',
+      lastName: facebookUser.last_name || '',
+      avatar: facebookUser.picture?.data?.url,
+      name: facebookUser.name,
+    };
+    
+    console.log('✅ Facebook user info obtained:', {
+      id: userInfo.facebookId,
+      email: userInfo.email,
+      name: userInfo.firstName + ' ' + userInfo.lastName
+    });
+    
+    // Buscar usuario existente por email o facebookId
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: userInfo.email },
+          { facebookId: userInfo.facebookId }
+        ]
+      },
+      include: {
+        wallet: true
+      }
+    });
+    
+    let isNewUser = false;
+    
+    if (!user) {
+      // Crear nuevo usuario
+      isNewUser = true;
+      
+      // Generar código de referido único
+      const referralCode = await generateUniqueReferralCode();
+      
+      // Crear usuario en transacción
+      user = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: userInfo.email,
+            facebookId: userInfo.facebookId,
+            password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12), // Password random
+            firstName: userInfo.firstName,
+            lastName: userInfo.lastName,
+            avatar: userInfo.avatar,
+            role: 'USER',
+            type: 'PERSON',
+            status: 'ACTIVE', // Facebook users are auto-verified
+            isEmailVerified: true, // Asumimos que Facebook ya verificó el email
+            emailVerifiedAt: new Date(),
+            referralCode,
+          },
+          include: {
+            wallet: true
+          }
+        });
+        
+        // Crear wallet
+        await tx.wallet.create({
+          data: {
+            userId: newUser.id,
+            balance: 0,
+            availableBalance: 0,
+            pendingBalance: 0,
+            currency: 'USD',
+            status: 'ACTIVE'
+          }
+        });
+        
+        return newUser;
+      });
+      
+      console.log('✅ New Facebook user created:', user.email);
+      
+      // Enviar email de bienvenida
+      try {
+        await EmailService.sendWelcomeEmail(user.email, user.firstName);
+        console.log('✅ Welcome email sent to Facebook user');
+      } catch (emailError) {
+        console.error('❌ Error sending welcome email:', emailError);
+      }
+      
+    } else {
+      // Usuario existente - actualizar facebookId si no lo tiene
+      if (!user.facebookId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { 
+            facebookId: userInfo.facebookId,
+            avatar: userInfo.avatar || user.avatar,
+            isEmailVerified: true,
+            emailVerifiedAt: user.emailVerifiedAt || new Date(),
+            status: 'ACTIVE'
+          },
+          include: {
+            wallet: true
+          }
+        });
+        
+        console.log('✅ Existing user linked with Facebook:', user.email);
+      }
+      
+      // Asegurar que tiene wallet
+      if (!user.wallet) {
+        await prisma.wallet.create({
+          data: {
+            userId: user.id,
+            balance: 0,
+            availableBalance: 0,
+            pendingBalance: 0,
+            currency: 'USD',
+            status: 'ACTIVE'
+          }
+        });
+      }
+    }
+    
+    // Generar tokens JWT
+    const tokenPayload = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      type: user.type,
+      sessionId: uuidv4()
+    };
+    
+    const tokens = JwtUtils.generateTokenPair(tokenPayload);
+    
+    // Crear sesión de usuario
+    await prisma.userSession.create({
+      data: {
+        userId: user.id,
+        token: tokens.refreshToken,
+        accessToken: tokens.accessToken,
+        userAgent: req.get('User-Agent') || 'Unknown',
+        ipAddress: req.ip || 'Unknown',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+      }
+    });
+    
+    // Preparar respuesta del usuario (sin password)
+    const { password, ...userResponse } = user;
+    
+    // Log del evento
+    logger.info('Facebook OAuth login successful', {
+      userId: user.id,
+      email: user.email,
+      isNewUser,
+      ip: req.ip,
+    });
+    
+    return ResponseUtils.success(res, {
+      user: userResponse,
+      tokens: {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+      isNewUser,
+      message: isNewUser ? 'Cuenta creada exitosamente con Facebook' : 'Login exitoso con Facebook'
+    }, isNewUser ? 'Registro exitoso' : 'Login exitoso');
+    
+  } catch (error: any) {
+    console.error('❌ Facebook OAuth error:', error);
+    logger.error('Facebook OAuth error', {
+      error: error.message,
+      ip: req.ip,
+    });
+    
+    if (error.message.includes('Token') || error.message.includes('token')) {
+      return ResponseUtils.badRequest(res, 'Token de Facebook inválido o expirado');
+    }
+    
+    return ResponseUtils.internalServerError(res, 'Error en la autenticación con Facebook');
+  }
 });
+
+

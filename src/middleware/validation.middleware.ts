@@ -136,22 +136,26 @@ export const authSchemas = {
     path: ['companyName'],
   }),
 
-  resetPassword: z.object({
-    email: commonSchemas.email,
-  }),
+ resetPassword: z.object({
+  body: z.object({
+    email: z.string().email('Email inválido'),
+  })
+}),
 
   verifyEmail: z.object({
     token: z.string().min(1, 'El token es requerido'),
   }),
 
   confirmResetPassword: z.object({
-    token: z.string().min(1, 'El token es requerido'),
-    newPassword: commonSchemas.password,
-    confirmPassword: z.string(),
-  }).refine(data => data.newPassword === data.confirmPassword, {
-    message: 'Las contraseñas no coinciden',
-    path: ['confirmPassword'],
-  }),
+  body: z.object({
+    token: z.string().min(1, 'Token requerido'),
+    password: z.string()
+      .min(8, 'La contraseña debe tener al menos 8 caracteres')
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 
+        'La contraseña debe contener al menos una minúscula, una mayúscula y un número'
+      ),
+  })
+}),
 
   changePassword: z.object({
     currentPassword: z.string().min(1, 'La contraseña actual es requerida'),

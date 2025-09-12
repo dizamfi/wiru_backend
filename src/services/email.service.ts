@@ -576,65 +576,155 @@ class EmailServiceClass {
   }
 
   /**
-   * Template de reset de contraseña
-   */
-  private getPasswordResetEmailTemplate(firstName: string, resetUrl: string): string {
-    return `
+ * Obtener template para email de recuperación de contraseña
+ */
+private getPasswordResetEmailTemplate(firstName: string, resetUrl: string): string {
+  return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <title>Restablece tu contraseña - Wiru</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Restablecer contraseña - Wiru</title>
       <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5; }
-        .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 40px 20px; }
-        .header { text-align: center; padding: 20px 0; border-bottom: 1px solid #e5e5e5; }
-        .logo { color: #a8c241; font-size: 32px; font-weight: bold; margin: 0; }
-        .content { padding: 40px 20px; }
-        .title { color: #333; font-size: 24px; margin-bottom: 20px; }
-        .text { color: #666; line-height: 1.6; margin-bottom: 20px; }
-        .button { display: inline-block; background: linear-gradient(135deg, #a8c241, #719428); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
-        .footer { text-align: center; padding: 20px; border-top: 1px solid #e5e5e5; color: #999; font-size: 14px; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 24px; font-weight: bold; color: #a8c241; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 8px; }
+        .button { 
+          display: inline-block; 
+          padding: 12px 24px; 
+          background: #a8c241; 
+          color: white; 
+          text-decoration: none; 
+          border-radius: 6px; 
+          margin: 20px 0;
+        }
+        .button:hover { background: #719428; }
+        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
+        .security { background: #fff3cd; padding: 15px; border-radius: 6px; margin: 20px 0; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1 class="logo">WIRU</h1>
+          <div class="logo">WIRU</div>
+          <h2>Restablece tu contraseña</h2>
         </div>
         
         <div class="content">
-          <h2 class="title">Restablece tu contraseña</h2>
+          <p>Hola <strong>${firstName}</strong>,</p>
           
-          <p class="text">Hola ${firstName},</p>
+          <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en Wiru.</p>
           
-          <p class="text">
-            Recibimos una solicitud para restablecer la contraseña de tu cuenta en Wiru.
-          </p>
+          <p>Si solicitaste este cambio, haz clic en el botón de abajo para establecer una nueva contraseña:</p>
           
           <div style="text-align: center;">
-            <a href="${resetUrl}" class="button">
-              🔐 Restablecer contraseña
-            </a>
+            <a href="${resetUrl}" class="button">Restablecer Contraseña</a>
           </div>
           
-          <p class="text">
-            Este enlace expirará en 1 hora por seguridad.
-          </p>
+          <p><strong>Este enlace expira en 2 horas</strong> por seguridad.</p>
           
-          <p class="text">
-            Si no solicitaste este cambio, puedes ignorar este email.
-          </p>
+          <div class="security">
+            <strong>⚠️ Importante:</strong>
+            <ul>
+              <li>Si no solicitaste este cambio, puedes ignorar este email</li>
+              <li>Nunca compartas este enlace con nadie</li>
+              <li>Wiru nunca te pedirá tu contraseña por email</li>
+            </ul>
+          </div>
+          
+          <p>Si tienes problemas con el botón, copia y pega este enlace en tu navegador:</p>
+          <p style="word-break: break-all; color: #666; font-size: 12px;">${resetUrl}</p>
         </div>
         
         <div class="footer">
-          <p>© 2024 Wiru. Todos los derechos reservados.</p>
+          <p>Este email fue enviado por Wiru</p>
+          <p>Si tienes preguntas, contáctanos en soporte@wiru.com</p>
         </div>
       </div>
     </body>
     </html>
-    `;
-  }
+  `;
+}
+
+/**
+ * Obtener template para notificación de contraseña cambiada
+ */
+private getPasswordChangedNotificationTemplate(firstName: string): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Contraseña actualizada - Wiru</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 24px; font-weight: bold; color: #a8c241; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 8px; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 6px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo">WIRU</div>
+          <h2>Contraseña actualizada</h2>
+        </div>
+        
+        <div class="content">
+          <p>Hola <strong>${firstName}</strong>,</p>
+          
+          <div class="success">
+            <strong>✅ Tu contraseña ha sido actualizada exitosamente</strong>
+          </div>
+          
+          <p>La contraseña de tu cuenta en Wiru fue cambiada el ${new Date().toLocaleString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}.</p>
+          
+          <p><strong>¿No fuiste tú?</strong></p>
+          <p>Si no realizaste este cambio, tu cuenta podría estar comprometida. Contacta inmediatamente a nuestro equipo de soporte.</p>
+          
+          <p>Por tu seguridad:</p>
+          <ul>
+            <li>Todas las sesiones activas fueron cerradas</li>
+            <li>Necesitarás iniciar sesión nuevamente en todos tus dispositivos</li>
+            <li>Usa tu nueva contraseña para acceder a tu cuenta</li>
+          </ul>
+        </div>
+        
+        <div class="footer">
+          <p>Este email fue enviado por Wiru</p>
+          <p>Si tienes preguntas, contáctanos en soporte@wiru.com</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Enviar email de notificación de contraseña cambiada
+ */
+async sendPasswordChangedNotification(email: string, firstName: string): Promise<boolean> {
+  const html = this.getPasswordChangedNotificationTemplate(firstName);
+  
+  return await this.sendEmail({
+    to: email,
+    subject: '🔐 Tu contraseña de Wiru ha sido actualizada',
+    html,
+  });
+}
 
   /**
    * Template de bienvenida

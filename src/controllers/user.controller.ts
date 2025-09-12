@@ -188,7 +188,7 @@ export const updateEmail = catchAsync(async (req: Request, res: Response) => {
   });
 
   logger.info('User email updated', { userId, newEmail: email });
-  ResponseUtils.success(res, updatedUser, 'Email actualizado. Se requiere nueva verificación.');
+  return ResponseUtils.success(res, updatedUser, 'Email actualizado. Se requiere nueva verificación.');
 });
 
 /**
