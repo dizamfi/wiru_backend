@@ -2,10 +2,12 @@
 
 // // Importar middleware
 // import { 
+//   categorySchemas,
+//   commonSchemas,
 //   validateBody, 
 //   validateParams, 
 //   validateQuery, 
-//   commonSchemas 
+  
 // } from '@/middleware/validation.middleware';
 // import { 
 //   authenticate, 
@@ -14,8 +16,8 @@
 // } from '@/middleware/auth.middleware';
 // import { generalRateLimit } from '@/middleware/rateLimit.middleware';
 
-// // Importar controladores (los crearemos después)
-// // import * as categoryController from '@/controllers/category.controller';
+// // Importar controladores REALES
+// import * as categoryController from '@/controllers/category.controller';
 
 // const router = Router();
 
@@ -29,233 +31,17 @@
 //   '/',
 //   optionalAuth, // Autenticación opcional
 //   validateQuery(commonSchemas.pagination),
-//   // categoryController.getCategories
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Categorías disponibles - En desarrollo',
-//       data: {
-//         categories: [
-//           {
-//             id: 'cat_phones',
-//             name: 'Teléfonos Móviles',
-//             description: 'Smartphones, teléfonos básicos y accesorios',
-//             pricePerKg: 8.50,
-//             estimatedWeight: 0.2,
-//             image: 'https://example.com/phones.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Smartphones',
-//               'Teléfonos básicos',
-//               'Accesorios móviles'
-//             ]
-//           },
-//           {
-//             id: 'cat_laptops',
-//             name: 'Laptops y Computadoras',
-//             description: 'Portátiles, computadoras de escritorio y componentes',
-//             pricePerKg: 12.75,
-//             estimatedWeight: 2.5,
-//             image: 'https://example.com/laptops.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Laptops',
-//               'Computadoras de escritorio',
-//               'Monitores',
-//               'Componentes'
-//             ]
-//           },
-//           {
-//             id: 'cat_tablets',
-//             name: 'Tablets',
-//             description: 'Tablets, e-readers y dispositivos similares',
-//             pricePerKg: 6.25,
-//             estimatedWeight: 0.6,
-//             image: 'https://example.com/tablets.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Tablets Android',
-//               'iPads',
-//               'E-readers',
-//               'Accesorios para tablets'
-//             ]
-//           },
-//           {
-//             id: 'cat_audio',
-//             name: 'Audio y Video',
-//             description: 'Equipos de audio, video y entretenimiento',
-//             pricePerKg: 4.50,
-//             estimatedWeight: 1.2,
-//             image: 'https://example.com/audio.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Auriculares',
-//               'Altavoces',
-//               'Sistemas de sonido',
-//               'Reproductores'
-//             ]
-//           },
-//           {
-//             id: 'cat_appliances',
-//             name: 'Electrodomésticos Pequeños',
-//             description: 'Electrodomésticos de cocina y hogar',
-//             pricePerKg: 3.25,
-//             estimatedWeight: 3.0,
-//             image: 'https://example.com/appliances.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Electrodomésticos de cocina',
-//               'Aspiradoras',
-//               'Ventiladores',
-//               'Calefactores'
-//             ]
-//           },
-//           {
-//             id: 'cat_components',
-//             name: 'Componentes y Placas',
-//             description: 'Placas madre, tarjetas, componentes sueltos',
-//             pricePerKg: 15.50,
-//             estimatedWeight: 0.3,
-//             image: 'https://example.com/components.jpg',
-//             status: 'ACTIVE',
-//             subcategories: [
-//               'Placas madre',
-//               'Tarjetas gráficas',
-//               'Memorias RAM',
-//               'Procesadores',
-//               'Discos duros'
-//             ]
-//           }
-//         ],
-//         pagination: {
-//           page: req.query.page || 1,
-//           limit: req.query.limit || 10,
-//           total: 6,
-//           totalPages: 1
-//         }
-//       }
-//     });
-//   }
+//   categoryController.getCategories
 // );
 
 // /**
 //  * GET /categories/:id
-//  * Obtener detalles de una categoría específica
+//  * Obtener categoría específica por ID (público)
 //  */
 // router.get(
 //   '/:id',
 //   validateParams(commonSchemas.id),
-//   optionalAuth,
-//   // categoryController.getCategoryById
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Detalles de categoría - En desarrollo',
-//       data: {
-//         category: {
-//           id: req.params.id,
-//           name: 'Teléfonos Móviles',
-//           description: 'Smartphones, teléfonos básicos y accesorios móviles',
-//           pricePerKg: 8.50,
-//           estimatedWeight: 0.2,
-//           image: 'https://example.com/phones.jpg',
-//           status: 'ACTIVE',
-//           subcategories: [
-//             {
-//               id: 'subcat_smartphones',
-//               name: 'Smartphones',
-//               description: 'Teléfonos inteligentes de todas las marcas',
-//               estimatedWeight: 0.18,
-//               examples: ['iPhone', 'Samsung Galaxy', 'Huawei', 'Xiaomi']
-//             },
-//             {
-//               id: 'subcat_basic_phones',
-//               name: 'Teléfonos Básicos',
-//               description: 'Teléfonos básicos y de botones',
-//               estimatedWeight: 0.12,
-//               examples: ['Nokia básicos', 'Teléfonos de botones']
-//             }
-//           ],
-//           acceptedConditions: [
-//             'Funcionando',
-//             'Con daños menores',
-//             'No funciona',
-//             'Solo para partes'
-//           ],
-//           tips: [
-//             'Incluye el cargador si lo tienes',
-//             'Retira la funda y protector de pantalla',
-//             'Asegúrate de hacer reset de fábrica',
-//             'Quita la tarjeta SIM y memoria'
-//           ],
-//           createdAt: new Date().toISOString(),
-//           updatedAt: new Date().toISOString()
-//         }
-//       }
-//     });
-//   }
-// );
-
-// /**
-//  * GET /categories/search
-//  * Buscar categorías por nombre o descripción
-//  */
-// router.get(
-//   '/search',
-//   validateQuery(commonSchemas.pagination),
-//   // categoryController.searchCategories
-//   (req, res) => {
-//     const searchTerm = req.query.q || '';
-//     res.json({
-//       success: true,
-//       message: 'Resultados de búsqueda - En desarrollo',
-//       data: {
-//         searchTerm,
-//         categories: [
-//           {
-//             id: 'cat_phones',
-//             name: 'Teléfonos Móviles',
-//             description: 'Smartphones, teléfonos básicos y accesorios',
-//             pricePerKg: 8.50,
-//             image: 'https://example.com/phones.jpg'
-//           }
-//         ],
-//         pagination: {
-//           page: req.query.page || 1,
-//           limit: req.query.limit || 10,
-//           total: 1,
-//           totalPages: 1
-//         }
-//       }
-//     });
-//   }
-// );
-
-// /**
-//  * GET /categories/price-estimate
-//  * Obtener estimación de precio por peso y categoría
-//  */
-// router.get(
-//   '/price-estimate',
-//   // categoryController.getPriceEstimate
-//   (req, res) => {
-//     const { categoryId, weight } = req.query;
-//     const weightNum = parseFloat(weight as string) || 0;
-//     const pricePerKg = 8.50; // Precio ejemplo
-    
-//     res.json({
-//       success: true,
-//       message: 'Estimación de precio - En desarrollo',
-//       data: {
-//         categoryId,
-//         weight: weightNum,
-//         pricePerKg,
-//         estimatedValue: weightNum * pricePerKg,
-//         currency: 'USD',
-//         note: 'Esta es una estimación. El precio final puede variar después de la verificación.'
-//       }
-//     });
-//   }
+//   categoryController.getCategoryById
 // );
 
 // // === RUTAS ADMINISTRATIVAS ===
@@ -269,41 +55,18 @@
 //   authenticate,
 //   requireAdmin,
 //   validateQuery(commonSchemas.pagination),
-//   // categoryController.getAllCategoriesAdmin
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Todas las categorías - En desarrollo (Admin)',
-//       data: {
-//         categories: [
-//           {
-//             id: 'cat_phones',
-//             name: 'Teléfonos Móviles',
-//             pricePerKg: 8.50,
-//             status: 'ACTIVE',
-//             ordersCount: 156,
-//             totalRevenue: 1325.60,
-//             createdAt: new Date().toISOString()
-//           },
-//           {
-//             id: 'cat_deprecated',
-//             name: 'Categoría Descontinuada',
-//             pricePerKg: 0.00,
-//             status: 'INACTIVE',
-//             ordersCount: 0,
-//             totalRevenue: 0,
-//             createdAt: new Date().toISOString()
-//           }
-//         ],
-//         pagination: {
-//           page: req.query.page || 1,
-//           limit: req.query.limit || 10,
-//           total: 2,
-//           totalPages: 1
-//         }
-//       }
-//     });
-//   }
+//   categoryController.getAllCategoriesAdmin
+// );
+
+// /**
+//  * GET /categories/admin/stats
+//  * Obtener estadísticas de categorías (solo admins)
+//  */
+// router.get(
+//   '/admin/stats',
+//   authenticate,
+//   requireAdmin,
+//   categoryController.getCategoryStats
 // );
 
 // /**
@@ -314,26 +77,8 @@
 //   '/',
 //   authenticate,
 //   requireAdmin,
-//   // validateBody(categorySchemas.createCategory),
-//   // categoryController.createCategory
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Categoría creada - En desarrollo (Admin)',
-//       data: {
-//         category: {
-//           id: 'cat_' + Date.now(),
-//           name: req.body.name,
-//           description: req.body.description,
-//           pricePerKg: req.body.pricePerKg,
-//           estimatedWeight: req.body.estimatedWeight,
-//           status: 'ACTIVE',
-//           createdBy: (req as any).user?.id,
-//           createdAt: new Date().toISOString()
-//         }
-//       }
-//     });
-//   }
+//   validateBody(categorySchemas.createCategory),
+//   categoryController.createCategory
 // );
 
 // /**
@@ -345,45 +90,8 @@
 //   authenticate,
 //   requireAdmin,
 //   validateParams(commonSchemas.id),
-//   // validateBody(categorySchemas.updateCategory),
-//   // categoryController.updateCategory
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Categoría actualizada - En desarrollo (Admin)',
-//       data: {
-//         categoryId: req.params.id,
-//         updates: req.body,
-//         updatedBy: (req as any).user?.id,
-//         updatedAt: new Date().toISOString()
-//       }
-//     });
-//   }
-// );
-
-// /**
-//  * PUT /categories/:id/status
-//  * Cambiar estado de categoría (solo admins)
-//  */
-// router.put(
-//   '/:id/status',
-//   authenticate,
-//   requireAdmin,
-//   validateParams(commonSchemas.id),
-//   // categoryController.updateCategoryStatus
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Estado de categoría actualizado - En desarrollo (Admin)',
-//       data: {
-//         categoryId: req.params.id,
-//         previousStatus: 'ACTIVE',
-//         newStatus: req.body.status,
-//         updatedBy: (req as any).user?.id,
-//         updatedAt: new Date().toISOString()
-//       }
-//     });
-//   }
+//   validateBody(categorySchemas.updateCategory),
+//   categoryController.updateCategory
 // );
 
 // /**
@@ -395,51 +103,7 @@
 //   authenticate,
 //   requireAdmin,
 //   validateParams(commonSchemas.id),
-//   // categoryController.deleteCategory
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Categoría eliminada - En desarrollo (Admin)',
-//       data: {
-//         categoryId: req.params.id,
-//         deletedBy: (req as any).user?.id,
-//         deletedAt: new Date().toISOString()
-//       }
-//     });
-//   }
-// );
-
-// /**
-//  * GET /categories/:id/stats
-//  * Obtener estadísticas de una categoría específica (solo admins)
-//  */
-// router.get(
-//   '/:id/stats',
-//   authenticate,
-//   requireAdmin,
-//   validateParams(commonSchemas.id),
-//   // categoryController.getCategoryStats
-//   (req, res) => {
-//     res.json({
-//       success: true,
-//       message: 'Estadísticas de categoría - En desarrollo (Admin)',
-//       data: {
-//         categoryId: req.params.id,
-//         totalOrders: 156,
-//         totalWeight: 234.5,
-//         totalRevenue: 1325.60,
-//         averageOrderValue: 8.49,
-//         monthlyStats: [
-//           { month: '2024-01', orders: 23, revenue: 195.45 },
-//           { month: '2023-12', orders: 31, revenue: 263.85 }
-//         ],
-//         topUsers: [
-//           { userId: 'user_123', orders: 8, revenue: 68.25 },
-//           { userId: 'user_456', orders: 6, revenue: 51.30 }
-//         ]
-//       }
-//     });
-//   }
+//   categoryController.deleteCategory
 // );
 
 // export default router;
@@ -448,114 +112,147 @@
 
 
 
-
-
+// src/routes/categories.routes.ts
 import { Router } from 'express';
-
-// Importar middleware
-import { 
-  categorySchemas,
-  commonSchemas,
-  validateBody, 
-  validateParams, 
-  validateQuery, 
-  
-} from '@/middleware/validation.middleware';
-import { 
-  authenticate, 
-  requireAdmin,
-  optionalAuth 
-} from '@/middleware/auth.middleware';
-import { generalRateLimit } from '@/middleware/rateLimit.middleware';
-
-// Importar controladores REALES
+import { validateBody, validateParams, validateQuery } from '@/middleware/validation.middleware';
+import { authenticate, optionalAuth } from '@/middleware/auth.middleware';
+// import { categoryRateLimit } from '@/middleware/rateLimit.middleware';
 import * as categoryController from '@/controllers/category.controller';
+import { z } from 'zod';
 
 const router = Router();
+
+// Schemas de validación
+const calculatePriceSchema = z.object({
+  quantity: z.number().min(1).max(100).optional().default(1),
+  weight: z.number().min(0.01).max(1000).optional(),
+  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']).optional().default('GOOD'),
+  accessories: z.array(z.string()).optional().default([])
+});
+
+const validateFieldsSchema = z.object({
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']).optional(),
+  quantity: z.number().min(1).optional(),
+  weight: z.number().min(0.01).optional(),
+  images: z.array(z.string()).optional(),
+  accessories: z.array(z.string()).optional(),
+  storage: z.string().optional(),
+  processor: z.string().optional(),
+  ram: z.string().optional(),
+  approximateAge: z.string().optional(),
+  componentType: z.string().optional()
+});
+
+const searchSchema = z.object({
+  q: z.string().min(1, 'Término de búsqueda requerido'),
+  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional()
+});
+
+const statsSchema = z.object({
+  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional()
+});
 
 // === RUTAS PÚBLICAS ===
 
 /**
- * GET /categories
- * Obtener todas las categorías activas (público)
+ * GET /categories/types
+ * Obtener los tipos principales de categorías
+ */
+router.get('/types', categoryController.getCategoryTypes);
+
+/**
+ * GET /categories/by-type/:type
+ * Obtener categorías por tipo (COMPLETE_DEVICES o DISMANTLED_DEVICES)
  */
 router.get(
-  '/',
-  optionalAuth, // Autenticación opcional
-  validateQuery(commonSchemas.pagination),
-  categoryController.getCategories
+  '/by-type/:type',
+  validateParams(z.object({
+    type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES'])
+  })),
+  categoryController.getCategoriesByType
 );
 
 /**
- * GET /categories/:id
- * Obtener categoría específica por ID (público)
+ * GET /categories/:id/details
+ * Obtener detalles completos de una categoría
  */
 router.get(
-  '/:id',
-  validateParams(commonSchemas.id),
-  categoryController.getCategoryById
-);
-
-// === RUTAS ADMINISTRATIVAS ===
-
-/**
- * GET /categories/admin/all
- * Obtener todas las categorías incluyendo inactivas (solo admins)
- */
-router.get(
-  '/admin/all',
-  authenticate,
-  requireAdmin,
-  validateQuery(commonSchemas.pagination),
-  categoryController.getAllCategoriesAdmin
+  '/:id/details',
+  validateParams(z.object({
+    id: z.string().min(1)
+  })),
+  categoryController.getCategoryDetails
 );
 
 /**
- * GET /categories/admin/stats
- * Obtener estadísticas de categorías (solo admins)
+ * GET /categories/search
+ * Buscar categorías por término
  */
 router.get(
-  '/admin/stats',
-  authenticate,
-  requireAdmin,
+  '/search',
+  validateQuery(searchSchema),
+  categoryController.searchCategories
+);
+
+/**
+ * GET /categories/stats
+ * Obtener estadísticas de categorías
+ */
+router.get(
+  '/stats',
+  validateQuery(statsSchema),
   categoryController.getCategoryStats
 );
 
+// === RUTAS CON AUTENTICACIÓN OPCIONAL ===
+
 /**
- * POST /categories
- * Crear nueva categoría (solo admins)
+ * POST /categories/:id/calculate-price
+ * Calcular precio estimado para una categoría
  */
 router.post(
-  '/',
-  authenticate,
-  requireAdmin,
-  validateBody(categorySchemas.createCategory),
-  categoryController.createCategory
+  '/:id/calculate-price',
+  optionalAuth, // Autenticación opcional para mejores cálculos
+  // categoryRateLimit,
+  validateParams(z.object({
+    id: z.string().min(1)
+  })),
+  validateBody(calculatePriceSchema),
+  categoryController.calculateEstimatedPrice
 );
 
 /**
- * PUT /categories/:id
- * Actualizar categoría (solo admins)
+ * POST /categories/:id/validate
+ * Validar campos requeridos para una categoría
  */
-router.put(
-  '/:id',
-  authenticate,
-  requireAdmin,
-  validateParams(commonSchemas.id),
-  validateBody(categorySchemas.updateCategory),
-  categoryController.updateCategory
+router.post(
+  '/:id/validate',
+  optionalAuth,
+  validateParams(z.object({
+    id: z.string().min(1)
+  })),
+  validateBody(validateFieldsSchema),
+  categoryController.validateCategoryFields
 );
 
+// === RUTA DE COMPATIBILIDAD ===
+
 /**
- * DELETE /categories/:id
- * Eliminar categoría (solo admins) - soft delete
+ * GET /categories
+ * Ruta de compatibilidad - redirige a tipos
  */
-router.delete(
-  '/:id',
-  authenticate,
-  requireAdmin,
-  validateParams(commonSchemas.id),
-  categoryController.deleteCategory
-);
+router.get('/', (req, res) => {
+  res.redirect('/api/v1/categories/types');
+});
+
+/**
+ * GET /categories/:id
+ * Ruta de compatibilidad - redirige a detalles
+ */
+router.get('/:id', (req, res) => {
+  res.redirect(`/api/v1/categories/${req.params.id}/details`);
+});
 
 export default router;

@@ -87,25 +87,113 @@ model UserSession {
   @@map("user_sessions")
 }
 
+// Enums para las nuevas categorías
+enum CategoryType {
+  COMPLETE_DEVICES      // Dispositivos Completos
+  DISMANTLED_DEVICES    // Dispositivos Desarmables
+}
+
+enum DeviceCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  BROKEN
+}
+
+enum MaterialGrade {
+  LOW_GRADE_GREEN       // Bajo Grado → Verde
+  LOW_GRADE_BROWN       // Bajo Grado → Marrón
+  HIGH_GRADE_CIRCUIT    // Alto Grado → Circuitos
+  MIXED_COMPONENTS      // Componentes Mixtos
+  PENTIUM_III          // Pentium III
+  PENTIUM_IV           // Pentium IV
+  MEDIUM_GRADE         // Medio Grado
+}
+
+enum ClassificationLevel {
+  MAIN_TYPE            // Dispositivos Completos / Desarmables
+  GRADE_LEVEL          // Bajo/Medio/Alto Grado
+  SUB_CATEGORY         // Específico (Verde, Marrón, etc.)
+  DEVICE_TYPE          // Tipo específico (Tablet, Laptop, etc.)
+}
+
 enum CategoryStatus {
   ACTIVE
   INACTIVE
 }
 
+// Modelo principal de categorías actualizado
 model Category {
   id              String         @id @default(cuid())
   name            String
   description     String?
-  pricePerKg      Decimal        @db.Decimal(10, 2)
-  image           String?
+  type            CategoryType   // COMPLETE_DEVICES o DISMANTLED_DEVICES
+  icon            String?
+  image           String?        // Imagen principal para mostrar en UI
   status          CategoryStatus @default(ACTIVE)
-  estimatedWeight Decimal?       @db.Decimal(8, 3)
+  
+  // Clasificación jerárquica
+  materialGrade     MaterialGrade?       // Grado del material
+  classificationLevel ClassificationLevel @default(DEVICE_TYPE)
+  parentCategoryId  String?             // Para estructura jerárquica
+  hierarchyPath     String[]            @default([]) // Path completo ["Bajo Grado", "Verde", "Verde/Amarillo"]
+  sortOrder         Int                 @default(0)  // Orden de visualización
+  
+  // Para dispositivos completos
+  estimatedWeight Decimal?       @db.Decimal(8, 3)  // Peso promedio en kg
+  basePrice       Decimal        @db.Decimal(10, 2) // Precio base por kg o por unidad
+  
+  // Para dispositivos desarmables  
+  pricePerKg      Decimal        @db.Decimal(10, 2) // Precio por kg
+  
+  // Rangos de precio
+  minPrice        Decimal        @db.Decimal(10, 2)
+  maxPrice        Decimal        @db.Decimal(10, 2)
+  
+  // Referencias visuales
+  referenceImages String[]       @default([])  // URLs de imágenes de referencia
+  examples        String[]       @default([])  // Ejemplos de productos
+  
+  // Campos requeridos para esta categoría
+  requiredFields  String[]       @default([])  // ["brand", "model", "condition"]
+  
+  // Multiplicadores por condición (JSON)
+  conditionMultipliers Json?      // { "excellent": 1.0, "good": 0.8, ... }
+  
+  // Configuración adicional
+  allowsQuantity  Boolean        @default(true)   // Si permite cantidad múltiple
+  requiresPhotos  Boolean        @default(true)   // Si requiere fotos obligatorias
+  minPhotos       Int            @default(1)      // Mínimo de fotos requeridas
+  maxPhotos       Int            @default(10)     // Máximo de fotos permitidas
+  
+  // Campos específicos para clasificación detallada
+  deviceFamily    String?        // Familia del dispositivo (ej: "Pentium IV", "Boards tipo 1")
+  qualityGrade    String?        // Grado de calidad (ej: "Buena", "Mala")
+  chipCount       Int?           // Número de chips (para Pentium)
+  boardType       String?        // Tipo de placa específico
+  
+  // Información de ayuda para el usuario
+  identificationHelp String?     // Texto de ayuda para identificar el dispositivo
+  commonMistakes   String[]      @default([]) // Errores comunes de clasificación
+  expertTips       String[]      @default([]) // Tips para expertos
+  
+  // Metadata y timestamps
+  metadata        Json?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   // Relations
+  parentCategory  Category?      @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
+  childCategories Category[]     @relation("CategoryHierarchy")
   orderItems      OrderItem[]
 
+  @@index([type])
+  @@index([status])
+  @@index([materialGrade])
+  @@index([classificationLevel])
+  @@index([parentCategoryId])
+  @@index([sortOrder])
   @@map("categories")
 }
 
@@ -171,26 +259,77 @@ model Order {
   @@map("orders")
 }
 
+// Actualizar el modelo OrderItem para incluir nueva info
 model OrderItem {
   id              String   @id @default(cuid())
   orderId         String
   categoryId      String
-  estimatedWeight Decimal  @db.Decimal(8, 3)
-  actualWeight    Decimal? @db.Decimal(8, 3)
-  pricePerKg      Decimal  @db.Decimal(10, 2)
-  estimatedValue  Decimal  @db.Decimal(10, 2)
-  actualValue     Decimal? @db.Decimal(10, 2)
-  images          String[] @default([])
+  
+  // Información del dispositivo/material
+  deviceName      String?        // Nombre específico del dispositivo
+  brand           String?        // Marca
+  model           String?        // Modelo
+  condition       DeviceCondition? // Estado del dispositivo
+  
+  // Campos específicos según clasificación
+  processorModel  String?        // Para Pentium III/IV
+  socketType      String?        // Tipo de socket
+  frequency       String?        // Frecuencia del procesador
+  coreCount       Int?           // Número de núcleos
+  storageCapacity String?        // Para tablets/laptops
+  processorType   String?        // Tipo de procesador
+  decoderType     String?        // Tipo de decodificador
+  resolution      String?        // Resolución soportada
+  deviceType      String?        // Tipo específico de dispositivo
+  readerType      String?        // Tipo de lector
+  printerType     String?        // Tipo de impresora
+  connectivity    String?        // Tipo de conectividad
+  systemType      String?        // Tipo de sistema
+  manufacturer    String?        // Fabricante específico
+  networkStandard String?        // Estándar de red
+  equipmentType   String?        // Tipo de equipo
+  networkTier     String?        // Nivel de red
+  capacity        String?        // Capacidad del equipo
+  approximateAge  String?        // Edad aproximada
+  componentType   String?        // Tipo de componente
+  authenticity    String?        // Autenticidad del componente
+  formFactor      String?        // Factor de forma
+  brandFeatures   String?        // Características de marca
+  damageType      String?        // Tipo de daño
+  systemModel     String?        // Modelo del sistema
+  enterpriseGrade Boolean?       // Si es grado empresarial
+  
+  // Cantidades y pesos
+  quantity        Int            @default(1)    // Cantidad de dispositivos
+  estimatedWeight Decimal        @db.Decimal(8, 3)
+  actualWeight    Decimal?       @db.Decimal(8, 3)
+  
+  // Precios
+  pricePerKg      Decimal        @db.Decimal(10, 2)
+  pricePerUnit    Decimal?       @db.Decimal(10, 2)  // Para dispositivos completos
+  estimatedValue  Decimal        @db.Decimal(10, 2)
+  actualValue     Decimal?       @db.Decimal(10, 2)
+  
+  // Evidencia y notas
+  images          String[]       @default([])
   notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  
+  // Accesorios incluidos (para dispositivos completos)
+  accessories     String[]       @default([])  // ["charger", "box", "documents"]
+  
+  // Metadata adicional
+  metadata        Json?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   // Relations
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  category        Category @relation(fields: [categoryId], references: [id])
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  category        Category       @relation(fields: [categoryId], references: [id])
 
-  @@index([orderId])     // ← Agregado índice
-  @@index([categoryId])  // ← Agregado índice
+  @@index([orderId])
+  @@index([categoryId])
+  @@index([condition])
   @@map("order_items")
 }
 
