@@ -273,32 +273,44 @@ export const walletSchemas = {
 
 // Esquemas de órdenes
 export const orderSchemas = {
-  createOrder: z.object({
+   createOrder: z.object({
     items: z.array(z.object({
-      categoryId: z.string().min(1, 'ID de categoría requerido'),
-      estimatedWeight: commonSchemas.weight,
-      images: z.array(z.string().url()).min(1, 'Se requiere al menos una imagen'),
-      notes: z.string().optional(),
-    })).min(1, 'Se requiere al menos un item'),
-    deliveryMethod: z.enum(['PICKUP_POINT', 'HOME_PICKUP']),
-    pickupAddress: z.object({
-      street: z.string().min(5, 'La dirección debe tener al menos 5 caracteres'),
-      city: z.string().min(2, 'La ciudad debe tener al menos 2 caracteres'),
-      state: z.string().min(2, 'El estado debe tener al menos 2 caracteres'),
-      zipCode: z.string().min(5, 'El código postal debe tener al menos 5 caracteres'),
-      country: z.string().min(2, 'El país debe tener al menos 2 caracteres'),
-      phone: commonSchemas.phone,
-      instructions: z.string().optional(),
+      categoryId: z.string().min(1),
+      quantity: z.number().positive(),
+      weight: z.number().positive().optional(),
+      condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']),
+      description: z.string().optional(),
+      images: z.array(z.string()).optional().default([]),
+      accessories: z.array(z.string()).optional().default([])
+    })).min(1, 'At least one item is required'),
+    
+    deliveryMethod: z.enum(['pickup', 'home_collection']),
+    
+    // Para pickup
+    pickupLocationId: z.string().optional(),
+    
+    // Para home collection
+    collectionAddress: z.object({
+      street: z.string(),
+      city: z.string(),
+      state: z.string(),
+      zipCode: z.string(),
+      country: z.string().default('Ecuador'),
+      additionalInfo: z.string().optional()
     }).optional(),
-    notes: z.string().optional(),
+    
+    preferredDate: z.string().optional(),
+    preferredTime: z.enum(['morning', 'afternoon', 'evening']).optional(),
+    specialInstructions: z.string().optional()
   }),
 
-    updateStatus: z.object({
-    status: z.enum(['PENDING', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'VERIFIED', 'PAID', 'CANCELLED']),
-    actualWeight: z.number().min(0).max(1000).optional(),
-    trackingNumber: z.string().max(100).optional(),
-    notes: z.string().max(1000).optional(),
-  }),
+  updateOrderStatus: z.object({
+    status: z.enum([
+      'pending', 'confirmed', 'in_transit', 'delivered', 
+      'processing', 'completed', 'cancelled'
+    ]),
+    notes: z.string().optional()
+  })
 };
 
 // Esquemas de usuario
@@ -323,20 +335,113 @@ export const userSchemas = {
 
 // Schemas para categorías
 export const categorySchemas = {
+
+   searchQuery: z.object({
+    q: z.string().min(1, 'Search term is required'),
+    type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional(),
+    page: z.string().optional().transform(val => val ? parseInt(val) : 1),
+    limit: z.string().optional().transform(val => val ? parseInt(val) : 20)
+  }),
+
+  priceCalculation: z.object({
+    categoryId: z.string().min(1, 'Category ID is required'),
+    weight: z.number().positive('Weight must be positive').optional(),
+    quantity: z.number().positive('Quantity must be positive').optional(),
+    condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']),
+    hasAccessories: z.boolean().optional().default(false),
+    hasOriginalBox: z.boolean().optional().default(false),
+    hasDocumentation: z.boolean().optional().default(false),
+    additionalDetails: z.record(z.string(), z.any()).optional()
+  }),
+
+  // 🔧 NEW: Material Grade specific schemas
+  materialGradeParams: z.object({
+    grade: z.enum([
+      'LOW_GRADE_GREEN', 'LOW_GRADE_BROWN', 'HIGH_GRADE_CIRCUIT',
+      'MIXED_COMPONENTS', 'PENTIUM_III', 'PENTIUM_IV', 'MEDIUM_GRADE'
+    ])
+  }),
+
+  categoryTypeParams: z.object({
+    type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES'])
+  }),
+
+  searchByMaterialQuery: z.object({
+    q: z.string().min(1, 'Search term is required'),
+    materialGrade: z.enum([
+      'LOW_GRADE_GREEN', 'LOW_GRADE_BROWN', 'HIGH_GRADE_CIRCUIT',
+      'MIXED_COMPONENTS', 'PENTIUM_III', 'PENTIUM_IV', 'MEDIUM_GRADE'
+    ]),
+    page: z.string().optional().transform(val => val ? parseInt(val) : 1),
+    limit: z.string().optional().transform(val => val ? parseInt(val) : 20)
+  }),
+
+  quickEstimate: z.object({
+    condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']),
+    weight: z.number().positive().optional(),
+    quantity: z.number().positive().optional().default(1)
+  }),
+
+  addImages: z.object({
+    images: z.array(z.object({
+      url: z.string().url(),
+      alt: z.string().optional(),
+      type: z.enum(['reference', 'example', 'guide']).optional().default('reference')
+    })).min(1, 'At least one image is required')
+  }),
+
+  // Existing schemas continue...
   createCategory: z.object({
-    name: z.string().min(2).max(100),
-    description: z.string().max(500).optional(),
-    pricePerKg: z.number().min(0).max(999.99),
-    image: z.string().url().optional(),
+    name: z.string().min(1, 'Name is required').max(100),
+    description: z.string().optional(),
+    type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']),
+    materialGrade: z.enum([
+      'LOW_GRADE_GREEN', 'LOW_GRADE_BROWN', 'HIGH_GRADE_CIRCUIT',
+      'MIXED_COMPONENTS', 'PENTIUM_III', 'PENTIUM_IV', 'MEDIUM_GRADE'
+    ]).optional(),
+    parentCategoryId: z.string().optional(),
+    icon: z.string().optional(),
+    image: z.string().optional(),
+    referenceImages: z.array(z.string()).optional().default([]),
+    examples: z.array(z.string()).optional().default([]),
+    estimatedWeight: z.number().positive().optional(),
+    pricePerKg: z.number().positive('Price per kg must be positive'),
+    pricePerUnit: z.number().positive().optional(),
+    minPrice: z.number().positive('Minimum price must be positive'),
+    maxPrice: z.number().positive('Maximum price must be positive'),
+    acceptedConditions: z.array(z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN'])).min(1),
+    requiredFields: z.array(z.string()).optional().default([]),
+    conditionMultipliers: z.record(z.string(), z.number().min(0).max(1)).optional(),
+    allowsQuantity: z.boolean().optional().default(true),
+    requiresPhotos: z.boolean().optional().default(true),
+    minPhotos: z.number().min(1).optional().default(2),
+    maxPhotos: z.number().min(1).optional().default(10),
+    sortOrder: z.number().int().min(0).optional().default(0),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional().default('ACTIVE')
   }),
 
   updateCategory: z.object({
-    name: z.string().min(2).max(100).optional(),
-    description: z.string().max(500).optional(),
-    pricePerKg: z.number().min(0).max(999.99).optional(),
-    image: z.string().url().optional(),
-    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
-  }),
+    name: z.string().min(1).max(100).optional(),
+    description: z.string().optional(),
+    icon: z.string().optional(),
+    image: z.string().optional(),
+    referenceImages: z.array(z.string()).optional(),
+    examples: z.array(z.string()).optional(),
+    estimatedWeight: z.number().positive().optional(),
+    pricePerKg: z.number().positive().optional(),
+    pricePerUnit: z.number().positive().optional(),
+    minPrice: z.number().positive().optional(),
+    maxPrice: z.number().positive().optional(),
+    acceptedConditions: z.array(z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN'])).optional(),
+    requiredFields: z.array(z.string()).optional(),
+    conditionMultipliers: z.record(z.string(), z.number().min(0).max(1)).optional(),
+    allowsQuantity: z.boolean().optional(),
+    requiresPhotos: z.boolean().optional(),
+    minPhotos: z.number().min(1).optional(),
+    maxPhotos: z.number().min(1).optional(),
+    sortOrder: z.number().int().min(0).optional(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional()
+  })
 };
 
 /**

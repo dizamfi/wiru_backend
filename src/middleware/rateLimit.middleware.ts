@@ -159,6 +159,16 @@ export const passwordResetRateLimit = rateLimit({
   handler: rateLimitHandler(15 * 60 * 1000, 3),
 });
 
+// Rate limiting específico para categories (muy permisivo temporalmente)
+export const categoriesRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 min en prod
+  max:  50, // 10000 en dev, 50 en prod
+  message: {
+    error: 'Demasiadas solicitudes a categorías',
+    retryAfter: 'Intenta nuevamente más tarde'
+  },
+});
+
 /**
  * Rate limiter flexible para crear órdenes
  */
