@@ -41,6 +41,9 @@ export const createOrder = catchAsync(async (req: Request, res: Response) => {
     }
 
     const itemWeight = parseFloat(item.estimatedWeight);
+    if (category.pricePerKg === null || category.pricePerKg === undefined) {
+      throw new Error(`El precio por kg de la categoría ${item.categoryId} es nulo`);
+    }
     const itemValue = itemWeight * parseFloat(category.pricePerKg.toString());
     
     estimatedTotal += itemValue;

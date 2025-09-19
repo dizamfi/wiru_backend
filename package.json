@@ -17,6 +17,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed-categories": "ts-node prisma/seed-categories.ts",
+    "db:seed-categories-hierarchical": "ts-node prisma/seed-categories-hierarchical.ts",
     "db:studio": "prisma studio",
     "test": "jest",
     "test:watch": "jest --watch",

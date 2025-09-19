@@ -94,12 +94,12 @@ router.get(
  * PUT /orders/:id/status
  * Actualizar estado de orden (solo admins)
  */
-router.put(
-  '/:id/status',
-  requireAdmin,
-  validateParams(commonSchemas.id),
-  validateBody(orderSchemas.updateStatus),
-  orderController.updateOrderStatus
-);
+// router.put(
+//   '/:id/status',
+//   requireAdmin,
+//   validateParams(commonSchemas.id),
+//   validateBody(orderSchemas.updateStatus),
+//   orderController.updateOrderStatus
+// );
 
 export default router;

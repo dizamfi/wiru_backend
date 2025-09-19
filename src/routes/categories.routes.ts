@@ -113,146 +113,201 @@
 
 
 // src/routes/categories.routes.ts
+
 import { Router } from 'express';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validation.middleware';
-import { authenticate, optionalAuth } from '@/middleware/auth.middleware';
-// import { categoryRateLimit } from '@/middleware/rateLimit.middleware';
+import { authenticate, requireAdmin, optionalAuth } from '@/middleware/auth.middleware';
+import { categoriesRateLimit } from '@/middleware/rateLimit.middleware';
 import * as categoryController from '@/controllers/category.controller';
 import { z } from 'zod';
 
 const router = Router();
 
 // Schemas de validación
-const calculatePriceSchema = z.object({
-  quantity: z.number().min(1).max(100).optional().default(1),
-  weight: z.number().min(0.01).max(1000).optional(),
-  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']).optional().default('GOOD'),
-  accessories: z.array(z.string()).optional().default([])
+const getCategoriesQuerySchema = z.object({
+  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional(),
+  includeChildren: z.enum(['true', 'false']).optional(),
+  includeBreadcrumb: z.enum(['true', 'false']).optional()
 });
 
-const validateFieldsSchema = z.object({
-  brand: z.string().optional(),
-  model: z.string().optional(),
-  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']).optional(),
-  quantity: z.number().min(1).optional(),
-  weight: z.number().min(0.01).optional(),
-  images: z.array(z.string()).optional(),
-  accessories: z.array(z.string()).optional(),
-  storage: z.string().optional(),
-  processor: z.string().optional(),
-  ram: z.string().optional(),
-  approximateAge: z.string().optional(),
-  componentType: z.string().optional()
+const searchCategoriesSchema = z.object({
+  q: z.string().min(2).max(100),
+  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional(),
+  leafOnly: z.enum(['true', 'false']).optional()
 });
 
-const searchSchema = z.object({
-  q: z.string().min(1, 'Término de búsqueda requerido'),
-  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional()
+const createCategorySchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']),
+  parentId: z.string().cuid().optional(),
+  isLeaf: z.boolean().optional(),
+  pricePerKg: z.number().positive().optional(),
+  minWeight: z.number().positive().optional(),
+  maxWeight: z.number().positive().optional(),
+  icon: z.string().max(50).optional(),
+  color: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+  images: z.array(z.string().url()).optional(),
+  thumbnailImage: z.string().url().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  sortOrder: z.number().int().optional()
 });
 
-const statsSchema = z.object({
-  type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES']).optional()
+const updateCategorySchema = createCategorySchema.partial();
+
+const reorderCategoriesSchema = z.object({
+  newOrder: z.array(z.string().cuid())
 });
+
+const commonSchemas = {
+  id: z.object({
+    categoryId: z.string().cuid()
+  })
+};
 
 // === RUTAS PÚBLICAS ===
 
 /**
- * GET /categories/types
- * Obtener los tipos principales de categorías
- */
-router.get('/types', categoryController.getCategoryTypes);
-
-/**
- * GET /categories/by-type/:type
- * Obtener categorías por tipo (COMPLETE_DEVICES o DISMANTLED_DEVICES)
+ * GET /categories/tree
+ * Obtener árbol completo de categorías
  */
 router.get(
-  '/by-type/:type',
-  validateParams(z.object({
-    type: z.enum(['COMPLETE_DEVICES', 'DISMANTLED_DEVICES'])
-  })),
-  categoryController.getCategoriesByType
+  '/tree',
+  categoriesRateLimit,
+  validateQuery(getCategoriesQuerySchema),
+  categoryController.getCategoryTree
 );
 
 /**
- * GET /categories/:id/details
- * Obtener detalles completos de una categoría
+ * GET /categories/root
+ * Obtener categorías raíz
  */
 router.get(
-  '/:id/details',
-  validateParams(z.object({
-    id: z.string().min(1)
-  })),
-  categoryController.getCategoryDetails
+  '/root',
+  categoriesRateLimit,
+  validateQuery(getCategoriesQuerySchema),
+  categoryController.getRootCategories
+);
+
+/**
+ * GET /categories/leaf
+ * Obtener solo categorías finales (seleccionables)
+ */
+router.get(
+  '/leaf',
+  categoriesRateLimit,
+  validateQuery(getCategoriesQuerySchema),
+  categoryController.getLeafCategories
 );
 
 /**
  * GET /categories/search
- * Buscar categorías por término
+ * Buscar categorías
  */
 router.get(
   '/search',
-  validateQuery(searchSchema),
+  categoriesRateLimit,
+  validateQuery(searchCategoriesSchema),
   categoryController.searchCategories
 );
 
 /**
- * GET /categories/stats
- * Obtener estadísticas de categorías
+ * GET /categories/:categoryId
+ * Obtener detalles de una categoría
  */
 router.get(
-  '/stats',
-  validateQuery(statsSchema),
+  '/:categoryId',
+  categoriesRateLimit,
+  validateParams(commonSchemas.id),
+  validateQuery(getCategoriesQuerySchema),
+  categoryController.getCategoryById
+);
+
+/**
+ * GET /categories/:categoryId/children
+ * Obtener hijos directos de una categoría
+ */
+router.get(
+  '/:categoryId/children',
+  categoriesRateLimit,
+  validateParams(commonSchemas.id),
+  categoryController.getCategoryChildren
+);
+
+/**
+ * GET /categories/:categoryId/breadcrumb
+ * Obtener breadcrumb de una categoría
+ */
+router.get(
+  '/:categoryId/breadcrumb',
+  categoriesRateLimit,
+  validateParams(commonSchemas.id),
+  categoryController.getCategoryBreadcrumb
+);
+
+// === RUTAS ADMIN ===
+
+/**
+ * POST /categories
+ * Crear nueva categoría (solo admins)
+ */
+router.post(
+  '/',
+  authenticate,
+  requireAdmin,
+  validateBody(createCategorySchema),
+  categoryController.createCategory
+);
+
+/**
+ * PUT /categories/:categoryId
+ * Actualizar categoría (solo admins)
+ */
+router.put(
+  '/:categoryId',
+  authenticate,
+  requireAdmin,
+  validateParams(commonSchemas.id),
+  validateBody(updateCategorySchema),
+  categoryController.updateCategory
+);
+
+/**
+ * DELETE /categories/:categoryId
+ * Eliminar categoría (solo admins)
+ */
+router.delete(
+  '/:categoryId',
+  authenticate,
+  requireAdmin,
+  validateParams(commonSchemas.id),
+  categoryController.deleteCategory
+);
+
+/**
+ * POST /categories/:categoryId/reorder
+ * Reordenar categorías hermanas (solo admins)
+ */
+router.post(
+  '/:categoryId/reorder',
+  authenticate,
+  requireAdmin,
+  validateParams(commonSchemas.id),
+  validateBody(reorderCategoriesSchema),
+  categoryController.reorderCategories
+);
+
+/**
+ * GET /categories/:categoryId/stats
+ * Obtener estadísticas de uso (solo admins)
+ */
+router.get(
+  '/:categoryId/stats',
+  authenticate,
+  requireAdmin,
+  validateParams(commonSchemas.id),
   categoryController.getCategoryStats
 );
-
-// === RUTAS CON AUTENTICACIÓN OPCIONAL ===
-
-/**
- * POST /categories/:id/calculate-price
- * Calcular precio estimado para una categoría
- */
-router.post(
-  '/:id/calculate-price',
-  optionalAuth, // Autenticación opcional para mejores cálculos
-  // categoryRateLimit,
-  validateParams(z.object({
-    id: z.string().min(1)
-  })),
-  validateBody(calculatePriceSchema),
-  categoryController.calculateEstimatedPrice
-);
-
-/**
- * POST /categories/:id/validate
- * Validar campos requeridos para una categoría
- */
-router.post(
-  '/:id/validate',
-  optionalAuth,
-  validateParams(z.object({
-    id: z.string().min(1)
-  })),
-  validateBody(validateFieldsSchema),
-  categoryController.validateCategoryFields
-);
-
-// === RUTA DE COMPATIBILIDAD ===
-
-/**
- * GET /categories
- * Ruta de compatibilidad - redirige a tipos
- */
-router.get('/', (req, res) => {
-  res.redirect('/api/v1/categories/types');
-});
-
-/**
- * GET /categories/:id
- * Ruta de compatibilidad - redirige a detalles
- */
-router.get('/:id', (req, res) => {
-  res.redirect(`/api/v1/categories/${req.params.id}/details`);
-});
 
 export default router;
