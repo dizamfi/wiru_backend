@@ -53,7 +53,9 @@ export const getProfile = catchAsync(async (req: Request, res: Response) => {
   }
 
   logger.info('User profile retrieved', { userId });
+  console.log(res, user, 'Perfil obtenido exitosamente');
   return ResponseUtils.success(res, user, 'Perfil obtenido exitosamente');
+
 });
 
 /**
@@ -155,6 +157,10 @@ export const updateProfile = catchAsync(async (req: Request, res: Response) => {
   logger.info('User profile updated', { userId, updatedFields: Object.keys(req.body) });
   ResponseUtils.success(res, updatedUser, 'Perfil actualizado exitosamente');
 });
+
+
+
+
 
 /**
  * Actualizar email del usuario
