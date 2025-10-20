@@ -271,43 +271,41 @@ export const walletSchemas = {
 
 
 
-// Esquemas de órdenes
 export const orderSchemas = {
-   createOrder: z.object({
+  createOrder: z.object({
     items: z.array(z.object({
-      categoryId: z.string().min(1),
-      quantity: z.number().positive(),
-      weight: z.number().positive().optional(),
-      condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BROKEN']),
-      description: z.string().optional(),
-      images: z.array(z.string()).optional().default([]),
-      accessories: z.array(z.string()).optional().default([])
-    })).min(1, 'At least one item is required'),
+      categoryId: z.string().cuid('ID de categoría inválido'),
+      estimatedWeight: z.number().positive('El peso debe ser mayor a 0'),
+      pricePerKg: z.number().positive('El precio por kg debe ser mayor a 0'),
+      estimatedValue: z.number().positive('El valor estimado debe ser mayor a 0'),
+      images: z.array(z.string().url('URL de imagen inválida')).optional().default([]),
+      notes: z.string().optional().default(''),
+    })).min(1, 'Debe incluir al menos un item'),
     
-    deliveryMethod: z.enum(['pickup', 'home_collection']),
+    deliveryMethod: z.enum(['PICKUP_POINT', 'HOME_PICKUP']),
     
-    // Para pickup
-    pickupLocationId: z.string().optional(),
-    
-    // Para home collection
-    collectionAddress: z.object({
-      street: z.string(),
-      city: z.string(),
-      state: z.string(),
-      zipCode: z.string(),
-      country: z.string().default('Ecuador'),
-      additionalInfo: z.string().optional()
-    }).optional(),
-    
-    preferredDate: z.string().optional(),
-    preferredTime: z.enum(['morning', 'afternoon', 'evening']).optional(),
-    specialInstructions: z.string().optional()
+    pickupAddress: z.object({
+      fullName: z.string().min(1, 'Nombre completo es requerido'),
+      phone: z.string().min(10, 'Teléfono inválido'),
+      email: z.string().email('Email inválido'),
+      idNumber: z.string().min(10, 'Cédula inválida'),
+      // Campos opcionales para recolección a domicilio
+      address: z.string().optional(),
+      city: z.string().optional(),
+      province: z.string().optional(),
+      reference: z.string().optional(),
+      // Campos opcionales para facturación
+      needsInvoice: z.boolean().optional(),
+      ruc: z.string().optional(),
+      businessName: z.string().optional(),
+      fiscalAddress: z.string().optional(),
+    }),
   }),
 
   updateOrderStatus: z.object({
     status: z.enum([
-      'pending', 'confirmed', 'in_transit', 'delivered', 
-      'processing', 'completed', 'cancelled'
+      'PENDING', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 
+      'VERIFIED', 'PAID', 'CANCELLED'
     ]),
     notes: z.string().optional()
   })
@@ -442,6 +440,30 @@ export const categorySchemas = {
     sortOrder: z.number().int().min(0).optional(),
     status: z.enum(['ACTIVE', 'INACTIVE']).optional()
   })
+};
+
+
+export const cartSchemas = {
+  addItem: z.object({
+    categoryId: z.string().min(1, 'categoryId es requerido'),
+    categoryName: z.string().min(1, 'categoryName es requerido'),
+    categoryPath: z.string().min(1, 'categoryPath es requerido'),
+    weight: z.number().positive('El peso debe ser positivo'),
+    quantity: z.number().int().positive('La cantidad debe ser positiva').default(1),
+    pricePerKg: z.number().positive('El precio debe ser positivo'),
+    estimatedValue: z.number().positive('El valor estimado debe ser positivo'),
+    images: z.array(z.string()).default([]), // ✅ Cambiado de z.string().url() a z.string()
+    notes: z.string().optional().default(''),
+  }),
+
+  updateItem: z.object({
+    weight: z.number().positive().optional(),
+    quantity: z.number().int().positive().optional(),
+    pricePerKg: z.number().positive().optional(),
+    estimatedValue: z.number().positive().optional(),
+    images: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  }),
 };
 
 /**

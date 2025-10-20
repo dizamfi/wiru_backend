@@ -105,6 +105,7 @@ import orderRoutes from './orders.routes';
 import categoryRoutes from './categories.routes';
 import uploadRoutes from './upload.routes';
 import webhookRoutes from './webhooks.routes';
+import cartRoutes from './cart.routes';
 // import paymentRoutes from './payments.routes';
 // import adminRoutes from './admin.routes';
 
@@ -184,6 +185,7 @@ router.use('/orders', orderRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/webhooks', webhookRoutes);
+router.use('/cart', cartRoutes);
 // router.use('/payments', paymentRoutes);
 // router.use('/admin', adminRoutes);
 

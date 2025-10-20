@@ -184,6 +184,8 @@ export interface ApiResponse<T = any> {
 }
 
 export class ResponseUtils {
+
+  
   /**
    * Respuesta de error 400 - Bad Request
    */

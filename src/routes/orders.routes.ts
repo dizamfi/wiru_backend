@@ -17,7 +17,7 @@ import { generalRateLimit } from '@/middleware/rateLimit.middleware';
 
 // Importar controladores REALES
 import * as orderController from '@/controllers/order.controller';
-import { updateOrderStatus } from '../controllers/order.controller';
+// import { updateOrderStatus } from '../controllers/order.controller';
 
 const router = Router();
 
