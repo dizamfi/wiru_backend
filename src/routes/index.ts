@@ -108,6 +108,7 @@ import webhookRoutes from './webhooks.routes';
 import cartRoutes from './cart.routes';
 // import paymentRoutes from './payments.routes';
 // import adminRoutes from './admin.routes';
+import notificationRoutes from './notification.routes';
 
 const router = Router();
 
@@ -172,7 +173,8 @@ router.get('/status', (req, res) => {
       upload: '/upload',
       webhooks: '/webhooks',
       payments: '/payments',
-      admin: '/admin'
+      admin: '/admin',
+      settings: '/settings',
     }
   });
 });
@@ -188,6 +190,7 @@ router.use('/webhooks', webhookRoutes);
 router.use('/cart', cartRoutes);
 // router.use('/payments', paymentRoutes);
 // router.use('/admin', adminRoutes);
+router.use('/notifications', notificationRoutes);
 
 // Middleware para rutas no encontradas dentro de /api/v1
 router.use((req, res) => {
@@ -204,7 +207,8 @@ router.use((req, res) => {
       '/api/v1/wallet/*',
       '/api/v1/orders/*',
       '/api/v1/upload/*',
-      '/api/v1/webhooks/*'
+      '/api/v1/webhooks/*',
+      '/api/v1/settings/*',
     ]
   });
 });

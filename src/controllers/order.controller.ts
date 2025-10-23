@@ -528,6 +528,8 @@ import prisma from '@/config/database';
 import { ResponseUtils } from '@/utils/response.utils';
 import { catchAsync } from '@/middleware/error.middleware';
 import logger from '@/config/logger';
+import eventEmitter from '@/services/eventEmitter.service';
+
 
 /**
  * Crear nueva orden
@@ -634,6 +636,19 @@ export const createOrder = catchAsync(async (req: Request, res: Response) => {
     });
 
     return newOrder;
+  });
+
+  // ✅ EMITIR EVENTO - La notificación se crea automáticamente
+  eventEmitter.emitOrderCreated({
+    orderId: order.id,
+    userId: order.userId,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    estimatedTotal: parseFloat(order.estimatedTotal.toString()),
+    metadata: {
+      deliveryMethod: order.deliveryMethod,
+      itemsCount: order.orderItems?.length || 0,
+    },
   });
 
   logger.info('Order created', { 

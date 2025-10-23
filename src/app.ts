@@ -206,6 +206,7 @@
 
 
 import express, { Application, Request, Response } from 'express';
+import { createServer, Server as HttpServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -223,14 +224,20 @@ import { errorHandler } from '@/middleware/error.middleware';
 // Importar rutas
 import apiRoutes from '@/routes';
 
+import webSocketService from '@/services/websocket.service'; 
+
+
 class App {
   public app: Application;
+  public httpServer: HttpServer;
 
   constructor() {
     this.app = express();
+    this.httpServer = createServer(this.app);
     this.initializeMiddleware();
     this.initializeRoutes();
     this.initializeErrorHandling();
+    this.initializeWebSockets();
   }
 
   private initializeMiddleware(): void {
@@ -281,6 +288,17 @@ class App {
     this.app.set('trust proxy', 1);
   }
 
+  // ✅ NUEVO MÉTODO PARA INICIALIZAR WEBSOCKETS
+  private initializeWebSockets(): void {
+    webSocketService.initialize(this.httpServer);
+    logger.info('✅ WebSocket service initialized');
+  }
+
+
+  public getHttpServer(): HttpServer {
+    return this.httpServer;
+  }
+
   private initializeRoutes(): void {
     // Health check endpoint
     this.app.get('/health', (req: Request, res: Response) => {
@@ -303,6 +321,8 @@ class App {
         documentation: '/api/docs',
       });
     });
+
+    
 
     // API routes
     this.app.use(`/api/${env.API_VERSION}`, apiRoutes);
@@ -393,7 +413,7 @@ class App {
   }
 
   public listen(port: number): void {
-    this.app.listen(port, () => {
+    this.httpServer.listen(port, () => {
       logger.info(`Servidor iniciado en puerto ${port}`);
       logger.info(`Entorno: ${env.NODE_ENV}`);
       logger.info(`CORS habilitado para: ${env.CORS_ORIGIN}`);

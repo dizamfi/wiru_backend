@@ -4,6 +4,7 @@ import { env, isDev, isProd } from '@/config/env';
 import { connectDatabase, disconnectDatabase } from '@/config/database';
 import logger from '@/config/logger';
 import { TokenCleanupJob } from '@/jobs/tokenCleanup.job';
+import NotificationListener from './listeners/notification.listener';
 
 
 /**
@@ -84,6 +85,11 @@ const startServer = async (): Promise<void> => {
     // Conectar a la base de datos
     logger.info('Connecting to database...');
     await connectDatabase();
+
+    // INICIALIZAR LISTENERS DE NOTIFICACIONES (NUEVA SECCIÓN)
+    logger.info('Initializing notification listeners...');
+    NotificationListener.initialize();
+    logger.info('Notification listeners ready');
 
     // Crear y configurar la aplicación
     const app = new App();
